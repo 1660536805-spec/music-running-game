@@ -7,7 +7,9 @@
      ② 自动前进：非 freeze 下角色应沿 −z 以 11 u/s 推进（PlayerController 复用 band 链路）
      ③ 升降层：↑/W → hi、↓/S → lo（层目标 + 实际层 + layerY 就位）
      ④ 单赛道运行时：真值谱面已加载 / BGM 已起播 / 段落已解析 / 长按空格进入同调 / 松手退出
-     ⑤ 零控制台报错
+     ⑤ 判定链路（P3）：不操作→Miss / 压线切→Perfect·Good / 脉冲球同层收集·异层不扣分 /
+        误导体掠过不扣分 / 双闸门不操作→通过
+     ⑥ 零控制台报错
    用法: node tools/causeway.js [--record]
    ============================================================================ */
 'use strict';
@@ -103,6 +105,48 @@ const URL = 'http://127.0.0.1:8777/%E5%A3%B0%E6%B5%AA%E6%98%9F%E7%90%83.html';
   await page.waitForTimeout(300);
   const rzOff = await page.evaluate(() => window.__info().cw);
   if (rzOff && rzOff.resonate !== false) fails.push('松开空格后未退出同调: ' + rzOff.resonate);
+
+  /* ---- ⑤ 判定链路（P3）：不操作→Miss / 压线切→Perfect·Good / 脉冲球 / 误导体 / 双闸门 ---- */
+  console.log('=== causeway · 判定链路 ===');
+  const cwInfo = () => page.evaluate(() => window.__info().cw);
+  const seek = (t) => page.evaluate(tv => window.__cwSeek(tv), t);
+
+  /* ⑥ 不操作 → Miss（gate t=6.076 answer=hi，停留在 lo） */
+  await seek(5.9); await page.waitForTimeout(900);
+  let js = (await cwInfo()).score;
+  console.log('⑥ 不操作:', JSON.stringify(js));
+  if (!(js.miss >= 1)) fails.push('⑥ 不操作未记 Miss: ' + JSON.stringify(js));
+
+  /* ⑦ 闸门前提早切换 → Perfect/Good 且形成连击（gate t=9.114 answer=hi） */
+  await seek(8.95); await page.keyboard.press('ArrowUp'); await page.waitForTimeout(900);
+  js = (await cwInfo()).score;
+  console.log('⑦ 压线切:', JSON.stringify(js));
+  if (!(js.perfect + js.good >= 1)) fails.push('⑦ 压线切未判 Perfect/Good: ' + JSON.stringify(js));
+  if (!(js.combo >= 1)) fails.push('⑦ 压线切未形成连击: ' + JSON.stringify(js));
+  await page.keyboard.press('ArrowDown'); await page.waitForTimeout(120);   /* 复位到 lo */
+
+  /* ⑧ 脉冲球：同层 → orbs+1；异层 → orbMiss+1 且不扣分（orb t=13.671 lo / t=14.430 hi） */
+  await seek(13.45); await page.waitForTimeout(900);
+  const jsO = (await cwInfo()).score;
+  console.log('⑧ 脉冲球同层:', JSON.stringify(jsO));
+  if (!(jsO.orbs >= 1)) fails.push('⑧ 同层脉冲球未收集: ' + JSON.stringify(jsO));
+  await seek(14.2); await page.waitForTimeout(900);
+  const jsO2 = (await cwInfo()).score;
+  console.log('⑧ 脉冲球异层:', JSON.stringify(jsO2));
+  if (!(jsO2.orbMiss >= 1)) fails.push('⑧ 异层脉冲球未计 orbMiss: ' + JSON.stringify(jsO2));
+  if (jsO2.miss !== 0) fails.push('⑧ 脉冲球漏接不应扣分: ' + JSON.stringify(jsO2));
+
+  /* ⑨ 误导体掠过 → 不扣分（decoy t=36.456 answer=ignore） */
+  await seek(36.3); await page.waitForTimeout(900);
+  const jsD = (await cwInfo()).score;
+  console.log('⑨ 误导体:', JSON.stringify(jsD));
+  if (jsD.miss !== 0) fails.push('⑨ 误导体不应扣分: ' + JSON.stringify(jsD));
+
+  /* ⑩ 双闸门不操作 → 通过（twin t=75.190 answer=hold） */
+  await seek(75.0); await page.waitForTimeout(500);
+  const jsT = (await cwInfo()).score;
+  console.log('⑩ 双闸门不操作:', JSON.stringify(jsT));
+  if (!(jsT.perfect >= 1) || jsT.miss !== 0) fails.push('⑩ 双闸门不操作未正确通过: ' + JSON.stringify(jsT));
 
   if (errs.length) { console.log('ERRORS:\n' + errs.join('\n')); fails.push(errs.length + ' 条控制台报错'); }
   console.log(fails.length ? ('\n✗ FAIL\n  - ' + fails.join('\n  - ')) : '\n✓ PASS (causeway)');

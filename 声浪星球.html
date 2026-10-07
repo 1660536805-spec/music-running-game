@@ -99,6 +99,49 @@
     color:#fff;font-size:calc(26*var(--px));font-weight:700;letter-spacing:.04em;
     transition:background .10s,border-color .10s,transform .10s}
   .cwres b.on{background:rgba(140,255,200,.58);border-color:rgba(140,255,200,.95);transform:scale(1.08)}
+  /* ---------- M3-CW · 单赛道操作提示：移到画面上方天空区（不遮挡近场障碍） ---------- */
+  .hud.cwhint{left:50%;top:calc(128*var(--px));transform:translateX(-50%);
+    padding:calc(12*var(--px)) calc(30*var(--px));font-size:calc(23*var(--px));letter-spacing:.03em;
+    opacity:.88}
+  .hud.cwhint kbd{padding:calc(3*var(--px)) calc(12*var(--px));font-size:calc(20*var(--px))}
+
+  /* ---------- M3-CW · 音游 HUD（惰性层：仅进入 causeway 时创建并显示） ---------- */
+  #cwhud{--px:calc(100vh / 941);position:fixed;inset:0;z-index:12;pointer-events:none;
+    display:none;color:#fff;font-family:inherit;user-select:none;-webkit-user-select:none}
+  #cwhud.on{display:block}
+  #cwhud .bar{position:absolute;left:0;right:0;top:0;height:calc(7*var(--px));background:rgba(255,255,255,.10)}
+  #cwhud .bar i{display:block;height:100%;width:0;
+    background:linear-gradient(90deg,#18E0FF,#8CFFC8,#FF4FD8);
+    box-shadow:0 0 calc(14*var(--px)) rgba(140,255,200,.65)}
+  #cwhud .sc{position:absolute;right:calc(40*var(--px));top:calc(38*var(--px));text-align:right;
+    text-shadow:0 calc(3*var(--px)) calc(16*var(--px)) rgba(0,0,0,.55)}
+  #cwhud .sc b{display:block;font-size:calc(56*var(--px));font-weight:800;letter-spacing:.02em;line-height:1.05}
+  #cwhud .sc s{display:block;font-size:calc(24*var(--px));font-weight:700;text-decoration:none;
+    color:rgba(255,255,255,.72);margin-top:calc(6*var(--px))}
+  #cwhud .cmb{position:absolute;left:calc(46*var(--px));top:calc(430*var(--px));
+    text-shadow:0 calc(6*var(--px)) calc(26*var(--px)) rgba(0,0,0,.5)}
+  #cwhud .cmb b{display:block;font-size:calc(104*var(--px));font-weight:800;line-height:.98}
+  #cwhud .cmb s{display:block;font-size:calc(22*var(--px));font-weight:700;letter-spacing:.22em;
+    text-decoration:none;color:rgba(255,255,255,.60)}
+  #cwhud .jd{position:absolute;left:50%;top:calc(390*var(--px));transform:translate(-50%,-50%) scale(.86);
+    font-size:calc(70*var(--px));font-weight:800;letter-spacing:.08em;opacity:0}
+  #cwhud .jd.perfect{color:#8CFFC8;text-shadow:0 0 calc(30*var(--px)) rgba(140,255,200,.85)}
+  #cwhud .jd.good{color:#FFE27A;text-shadow:0 0 calc(30*var(--px)) rgba(255,226,122,.75)}
+  #cwhud .jd.miss{color:#FF6B8A;text-shadow:0 0 calc(30*var(--px)) rgba(255,107,138,.75)}
+  #cwhud .jd.pop{opacity:1;transform:translate(-50%,-50%) scale(1);
+    transition:opacity .10s ease,transform .10s ease}
+  #cwhud .ly{position:absolute;left:calc(46*var(--px));top:calc(700*var(--px));
+    display:flex;flex-direction:column;gap:calc(10*var(--px))}
+  #cwhud .ly b{padding:calc(7*var(--px)) calc(22*var(--px));border-radius:calc(999*var(--px));
+    font-size:calc(24*var(--px));font-weight:800;letter-spacing:.14em;
+    border:calc(2*var(--px)) solid rgba(255,255,255,.20);color:rgba(255,255,255,.46);
+    background:rgba(255,255,255,.05);transition:background .10s,color .10s,border-color .10s}
+  #cwhud .ly b.on{color:#fff}
+  #cwhud .ly b.lo.on{background:rgba(24,224,255,.34);border-color:rgba(24,224,255,.85)}
+  #cwhud .ly b.hi.on{background:rgba(255,79,216,.34);border-color:rgba(255,79,216,.85)}
+  #cwhud .orb{position:absolute;right:calc(40*var(--px));top:calc(168*var(--px));
+    font-size:calc(26*var(--px));font-weight:700;color:rgba(255,255,255,.78);
+    text-shadow:0 calc(3*var(--px)) calc(14*var(--px)) rgba(0,0,0,.5)}
   .side{right:calc(66*var(--px));top:50%;transform:translateY(-50%);
     display:flex;flex-direction:column;gap:calc(22*var(--px))}
   .side b{width:calc(96*var(--px));height:calc(96*var(--px));border-radius:calc(26*var(--px));
@@ -2460,7 +2503,7 @@ var HUD_DEF = {
      常驻「同调」圆钮作触摸兜底（触摸主通道 = 上半屏轻点升 / 下半屏轻点降 / 长按任意处同调） */
   causeway: function(){
     return musicCard(SONGS.superweave, '00:00', '01:37') +
-      '<div class="hud glass prompt"><kbd>↑</kbd><kbd>W</kbd>升 · <kbd>↓</kbd><kbd>S</kbd>降 · 长按<kbd>空格</kbd>同调 <em>⚡</em></div>' +
+      '<div class="hud glass prompt cwhint"><kbd>↑</kbd><kbd>W</kbd>升 · <kbd>↓</kbd><kbd>S</kbd>降 · 长按<kbd>空格</kbd>同调 <em>⚡</em></div>' +
       '<div class="hud rbtns cwres"><b data-act="resonate">同调</b></div>';
   }
 };
@@ -2792,11 +2835,13 @@ function loop(now){
         BeatClock.update(dt);
         Lane.update(dt, cur);                      /* M3-OP：跑道换道插值（easeOutCubic） */
         Track.update(dt, cur);                     /* M3-CW：单赛道升降层插值（causeway 专用） */
+        Obstacle.update(dt, cur, SCN[cur]);        /* M3-CW：谱面→障碍生成 / 掠过判定 / 回收 */
         PlayerController.update(dt, cur, SCN[cur]);
         Collectible.update(dt, cur, SCN[cur]);
         Portal.update(dt, cur, SCN[cur]);
         CameraRig.update(dt, cur);                 /* M2：方案 B 微跟随（仅可玩关） */
         VFX.update(dt, cur);
+        RhythmHUD.update(dt);                      /* M3-CW：音游浮层（仅 causeway 显示时写 DOM） */
       }
       updateScene(cur, dt);
       renderer.setViewport(0, 0, innerWidth, innerHeight);
@@ -2968,7 +3013,7 @@ var Lane = {
      · FREEZE 下不更新（causeway 亦不在 RENDER_ORDER）⇒ 定帧零漂移，双保险。 */
 var Track = {
   layer: 'lo', target: 'lo', t: 1, fromY: 0, toY: 0, layerY: 0,
-  pitch: 0, roll: 0, buf: 0, bufT: 0, bump: 0, bumpDir: 0, songT: 0, section: null,
+  pitch: 0, roll: 0, buf: 0, bufT: 0, bump: 0, bumpDir: 0, songT: 0, section: null, lastSwitchT: 0,
   isCw: function(k){ return !!(LEVELS[k] && LEVELS[k].mode === 'single-track'); },
   /* ---- 谱面时钟几何（镜像 tools/gen_causeway.js：分段常量速度的闭式积分）----
      距离 D(t) / 世界 z(t) / 反函数 t(D)：供 Track 起播锚定与 P3 障碍落位使用。 */
@@ -2990,8 +3035,11 @@ var Track = {
     Track.layer = 'lo'; Track.target = 'lo'; Track.t = 1;
     Track.layerY = 0; Track.fromY = 0; Track.toY = 0;
     Track.pitch = 0; Track.roll = 0; Track.buf = 0; Track.bufT = 0; Track.bump = 0;
-    Track.songT = 0; Track.energy = 0;
+    Track.songT = 0; Track.energy = 0; Track.lastSwitchT = -99;
   },
+  /* 判定用"有效层"：层间切换动画进行中时按**已提交的目标层**计（玩家已下决心，
+     且 90 ms 切换 < 半拍 190 ms ⇒ 允许在闸门前压线切） */
+  effLayer: function(){ return (Track.t < 1) ? Track.target : Track.layer; },
   /* 升(+1) / 降(−1)：一次输入翻转一层；同层再按 ⇒ 越界软反馈，不算失败 */
   request: function(dir, k){
     var to = (dir > 0) ? 'hi' : 'lo';
@@ -2999,6 +3047,7 @@ var Track = {
     if (to === Track.target){ Track._bump(dir); return false; }
     Track.fromY = Track.layerY; Track.toY = (to === 'hi') ? CW.LAYER_HI : 0;
     Track.target = to; Track.t = 0;
+    Track.lastSwitchT = Track.songT;                 /* M3-CW：供 Judge 量取"操作新鲜度" */
     Bus.emit('cw:layer', { to: to });
     return true;
   },
@@ -3015,8 +3064,14 @@ var Track = {
   energy: 0,                                  /* P2 起由 Chart 写入当前段落能量 */
   update: function(dt, k){
     if (dt <= 0 || !Track.isCw(k)) return;
-    /* 音乐时钟：以 BGM 播放位置为准（与谱面同源采样 ⇒ 逐拍对齐）；段落能量驱动冲刺速度 */
-    Track.songT = BGM.songT();
+    /* 音乐时钟：优先取 BGM 播放位置（与谱面同源采样 ⇒ 逐拍对齐）；
+       无音频时（未解码 / 无手势 / 静音环境）退化为"由已行进距离反解" ⇒ 谱面照常推进。 */
+    if (BGM.playing) Track.songT = BGM.songT();
+    else {
+      var S2 = SCN[k];
+      var d2 = (S2 && S2.hero) ? Math.max(0, CW.Z_START - S2.hero.position.z) : 0;
+      Track.songT = Chart.ready ? Track.tAtDist(d2) : 0;
+    }
     var sec = Chart.ready ? Chart.sectionAt(Track.songT) : null;
     if (sec){ Track.energy = sec.energy; Track.section = sec; }
     if (Track.bufT > 0){ Track.bufT = Math.max(0, Track.bufT - dt); if (Track.bufT === 0) Track.buf = 0; }
@@ -3138,6 +3193,11 @@ function m1Sfx(kind){
     else if (kind === 'land')        tone('sine', 160, 70, 0.14, 0.24);
     else if (kind === 'portalGo')    tone('sawtooth', 220, 1320, 0.55, 0.26);
     else if (kind === 'uiClick')     tone('triangle', 880, 880, 0.06, 0.16);
+    /* M3-CW ·《超频长阶》判定音（与 BGM 并行、走 SFX 总线，故音量压低避免盖住音乐） */
+    else if (kind === 'cwHit')       tone('square',   1320, 1320, 0.07, 0.22);
+    else if (kind === 'cwGood')      tone('triangle',  988,  988, 0.07, 0.18);
+    else if (kind === 'cwOrb')       tone('triangle', 1568, 2093, 0.10, 0.20);
+    else if (kind === 'cwMiss')      tone('sawtooth',  190,   95, 0.16, 0.20);
   } catch(e){}
 }
 
@@ -3269,6 +3329,332 @@ var CWInput = {
     Bus.emit('cw:resonate', { on: false });
   },
   reset: function(){ CWInput.cancel(); }
+};
+
+/* ==========================================================================
+   M3-CW · 判定 / 计分（Judge + CWScore）
+   --------------------------------------------------------------------------
+   判定模型（对齐 docs/声浪星球-关卡设计-超频长阶.md §6 / §7）：
+     · 障碍按其谱面时刻 t 迎面掠过角色平面；**掠过瞬间**比较 Track 的有效层与障碍答案；
+     · 答案在闸门前 ≤160 ms 内完成切换 ⇒ 按切换新鲜度给 Perfect/Good；更早站好位 ⇒ 直接 Perfect；
+     · 站错层 ⇒ Miss（连击归零）；脉冲球漏掉不扣连击；误导体永不判定（只留痕）。
+     · 承"只奖励理解、不惩罚失手"：预判/同调均只加成、不失分。
+   ========================================================================== */
+var Judge = {
+  P: 0.080, G: 0.160,
+  rate: function(dt){ var a = Math.abs(dt); return a <= Judge.P ? 'perfect' : (a <= Judge.G ? 'good' : 'miss'); },
+  cross: function(o){
+    var st = Track.songT, eff = Track.effLayer();
+    /* ① 误导体：从不判定；仅在"被它骗到"（近期切换过）时留痕，不扣分 */
+    if (o.answer === 'ignore'){
+      if (st - Track.lastSwitchT <= 0.28) CWScore.decoy++;
+      o.grade = 'none'; return;
+    }
+    /* ② 双闸门：**不操作**才是正解 —— 静默窗口内未切换层 ⇒ Perfect，切换过 ⇒ Miss */
+    if (o.answer === 'hold'){
+      var quiet = (st - Track.lastSwitchT) > Obstacle.JUDGE_HOLD;
+      Judge._apply(o, quiet ? 'perfect' : 'miss'); return;
+    }
+    /* ③ 脉冲球：同层穿过即得（漏掉仅不计，不破连击） */
+    if (o.type === 'orb'){
+      if (eff === o.layer){ CWScore.orbs++; Judge._apply(o, 'perfect', 50); }
+      else { CWScore.orbMiss++; o.grade = 'none'; }
+      return;
+    }
+    /* ④ 闸门 / 连环柱：必须处于 answer 层 */
+    if (eff === o.answer){
+      var fresh = st - Track.lastSwitchT;
+      Judge._apply(o, (fresh <= Judge.G) ? Judge.rate(fresh) : 'perfect');
+    } else Judge._apply(o, 'miss');
+  },
+  _apply: function(o, grade, base){
+    o.grade = grade;
+    o.fxT = 0.34;                                   /* 命中/失误的缩放脉冲 */
+    if (grade === 'miss') m1Sfx('cwMiss');
+    else if (o.type === 'orb') m1Sfx('cwOrb');
+    else m1Sfx(grade === 'perfect' ? 'cwHit' : 'cwGood');
+    CWScore.hit(grade, base);
+  }
+};
+
+var CWScore = {
+  perfect: 0, good: 0, miss: 0, combo: 0, maxCombo: 0, score: 0,
+  orbs: 0, orbMiss: 0, decoy: 0,
+  mult: 1,        /* P4 同调倍率（1.0 + 0.5 × 同调达成率） */
+  amo: 1,         /* P4 预判倍率（押对 ×1.5 / 其余 ×1.0） —— 本段内有效 */
+  reset: function(){
+    CWScore.perfect = CWScore.good = CWScore.miss = 0;
+    CWScore.combo = CWScore.maxCombo = CWScore.score = 0;
+    CWScore.orbs = CWScore.orbMiss = CWScore.decoy = 0;
+    CWScore.mult = 1; CWScore.amo = 1;
+  },
+  comboMult: function(){ return 1 + Math.min(CWScore.combo, 50) / 50 * 0.5; },
+  hit: function(grade, base){
+    if (grade === 'miss'){ CWScore.miss++; CWScore.combo = 0; }
+    else {
+      if (grade === 'perfect') CWScore.perfect++; else CWScore.good++;
+      CWScore.combo++;
+      if (CWScore.combo > CWScore.maxCombo) CWScore.maxCombo = CWScore.combo;
+      var b = (base == null) ? (grade === 'perfect' ? 100 : 60) : base;
+      CWScore.score += Math.round(b * CWScore.comboMult() * CWScore.mult * CWScore.amo);
+    }
+    RhythmHUD.flash(grade);
+  },
+  accuracy: function(){
+    var tot = CWScore.perfect + CWScore.good + CWScore.miss;
+    return tot ? ((CWScore.perfect + CWScore.good * 0.6) / tot) : 1;
+  },
+  rank: function(){
+    var a = CWScore.accuracy();
+    return a >= 0.95 ? 'S' : a >= 0.85 ? 'A' : a >= 0.70 ? 'B' : 'C';
+  },
+  judged: function(){ return CWScore.perfect + CWScore.good + CWScore.miss; }
+};
+
+/* ==========================================================================
+   M3-CW · 障碍系统（Obstacle）—— 谱面 → 世界物体 → 掠过判定
+   --------------------------------------------------------------------------
+   障碍按谱面 z 静态落位（z = CW.Z_START − distAt(t) = Track.zOf(t)），角色沿 −z 迎面逼近。
+   实体用「按 type:layer 分池 + 通过后回收」管理：同时存活数由 (LOOKAHEAD + RECYCLE) 窗口界定
+   （谱面最小间隔恰为 1 拍 0.380 s ⇒ 窗口内至多 ~10 个），故常驻 draw call 极低。
+   6 类视觉语义（docs/声浪星球-关卡设计-超频长阶.md §4）：
+     · gate   闸门：横梁占据「layer 所指那一层」的通行空间 ⇒ 必须切到 answer 层
+     · pillar 连环柱：柱体 + 横梁（判定同 gate，成串出现）
+     · twin   双闸门：上下夹击留缝 ⇒ **不操作**才是正解
+     · orb    脉冲球：落在谱面音符上，**同层穿过**即得
+     · decoy  误导体：半透明幽灵闸门，**必须无视**
+   几何对应：Lo 地面 y=0、Hi 地面 y=0.9（CW.LAYER_HI）；
+     layer='lo' 的梁贴地 0→0.78（Hi 层角色从上方越过）；layer='hi' 的梁悬空 1.58→2.34（Lo 层角色从下方钻过）。
+   ========================================================================== */
+var Obstacle = {
+  LOOKAHEAD: 2.6,      /* 提前生成的音乐时间窗 (s)：15 u/s ⇒ 约 39 m 视距 */
+  RECYCLE: 1.1,        /* 掠过判定后延迟回收 (s)，留出脉冲反馈时间 */
+  JUDGE_HOLD: 0.25,    /* twin「不操作」的静默窗口 (s) */
+  root: null, pools: null, free: null, live: null, nextIdx: 0, mounted: false,
+  LO_BAND: [0.00, 0.78], HI_BAND: [1.58, 2.34],      /* 梁的垂直占据带 */
+
+  mount: function(){
+    if (Obstacle.mounted || FREEZE) return;           /* FREEZE 下不挂载 ⇒ 定帧 children 数不变 */
+    var S = SCN.causeway; if (!S || !S.scene) return;
+    Obstacle.root = new THREE.Group(); Obstacle.root.name = 'cwObstacles';
+    S.scene.add(Obstacle.root);
+    Obstacle.pools = {}; Obstacle.free = {}; Obstacle.live = [];
+    Obstacle.mounted = true;
+    /* 预热：9 种 type:layer 各建 1 个置于相机之后，编译一次着色器再移除。
+       three 的 program 缓存按材质参数（而非材质实例）复用 ⇒ 后续 make() 新建材质直接命中，
+       从而消除"首个障碍生成瞬间"的着色器编译卡顿。不留下常驻对象、不影响 draw call。 */
+    var kinds = [['gate','lo'],['gate','hi'],['orb','lo'],['orb','hi'],['twin','both'],
+                 ['pillar','lo'],['pillar','hi'],['decoy','lo'],['decoy','hi']];
+    var warm = [], zBack = (S.hero ? S.hero.position.z : 0) + 80;
+    for (var i = 0; i < kinds.length; i++){
+      var o = Obstacle._alloc(kinds[i][0], kinds[i][1]);
+      o.mesh.position.set(0, 0, zBack); o.mesh.visible = true;
+      warm.push(o);
+    }
+    if (S.camera) renderer.compile(S.scene, S.camera);
+    for (var j = 0; j < warm.length; j++) Obstacle._retire(warm[j], true);
+  },
+  /* ---- 视觉构件 ---- */
+  /* 通用横梁：高自发光主体 + 近白能量芯 + 上下近白描边 ⇒ 梁体明显比赛道粉边更亮、轮廓清晰 */
+  _beam: function(g, layer, color, op, core){
+    var b = (layer === 'hi') ? Obstacle.HI_BAND : Obstacle.LO_BAND;
+    var h = b[1] - b[0], yc = (b[0] + b[1]) / 2, W = CW.W;
+    add(g, new THREE.BoxGeometry(W, h, 0.30),
+      M(color, { emissive: shade(color, 0.9), ei: 1.15, transparent: true, opacity: op == null ? 0.95 : op, fog: false }),
+      0, yc, 0, { cast: false, recv: false });
+    add(g, new THREE.BoxGeometry(W - 0.12, h * 0.26, 0.34),
+      basic(core == null ? 0xFFFFFF : core, { transparent: true, opacity: 0.70, additive: true, fog: false, depthWrite: false }),
+      0, yc, 0, { cast: false, recv: false });
+    var edge = basic(0xFFFFFF, { transparent: true, opacity: 0.90, fog: false, depthWrite: false });
+    add(g, new THREE.BoxGeometry(W + 0.06, 0.06, 0.34), edge, 0, b[1] - 0.01, 0, { cast: false, recv: false });
+    add(g, new THREE.BoxGeometry(W + 0.06, 0.06, 0.34), edge, 0, b[0] + 0.01, 0, { cast: false, recv: false });
+  },
+  make: function(type, layer){
+    var g = new THREE.Group(), W = CW.W, hi = CW.LAYER_HI;
+    var C_GATE = 0xFF5A8A, C_PIL = 0xFFA62B, C_ORB = CW.ACC, C_DECOY = 0xA78BEA;
+    if (type === 'gate'){ Obstacle._beam(g, layer, C_GATE); }
+    else if (type === 'pillar'){
+      Obstacle._beam(g, layer, C_PIL, null, 0xFFE6B0);          /* 暖芯：保持琥珀身份，不与 gate 的冷白混淆 */
+      /* 双侧柱：高自发光 + 顶端亮帽，强化「连环柱」的琥珀暖色，与 gate 的冷粉拉开对比 */
+      var colMat = M(C_PIL, { emissive: shade(C_PIL, 0.85), ei: 1.0, transparent: true, opacity: 0.95, fog: false });
+      var capMat = basic(0xFFFFFF, { transparent: true, opacity: 0.88, additive: true, fog: false, depthWrite: false });
+      add(g, new THREE.BoxGeometry(0.22, 2.5, 0.22), colMat, -W / 2 + 0.16, 1.25, 0, { cast: false, recv: false });
+      add(g, new THREE.BoxGeometry(0.22, 2.5, 0.22), colMat,  W / 2 - 0.16, 1.25, 0, { cast: false, recv: false });
+      add(g, new THREE.BoxGeometry(0.30, 0.10, 0.30), capMat, -W / 2 + 0.16, 2.52, 0, { cast: false, recv: false });
+      add(g, new THREE.BoxGeometry(0.30, 0.10, 0.30), capMat,  W / 2 - 0.16, 2.52, 0, { cast: false, recv: false });
+    }
+    else if (type === 'twin'){
+      Obstacle._beam(g, 'lo', C_GATE);
+      Obstacle._beam(g, 'hi', C_GATE);
+      /* 中缝：先铺一条近黑暗带（"这里是个洞"），再叠中央导引光带（明示保持层、穿缝而过） */
+      var gTp = Obstacle.HI_BAND[0], gBt = Obstacle.LO_BAND[1], gcn = (gTp + gBt) / 2;
+      add(g, new THREE.BoxGeometry(W, gTp - gBt, 0.16),
+        basic(0x0A0418, { transparent: true, opacity: 0.72, fog: false, depthWrite: false }),
+        0, gcn, 0, { cast: false, recv: false });
+      var slot = add(g, new THREE.BoxGeometry(W - 0.5, (gTp - gBt) * 0.5, 0.08),
+        basic(C_ORB, { transparent: true, opacity: 0.30, additive: true, fog: false, depthWrite: false }),
+        0, gcn, 0, { cast: false, recv: false });
+      g.userData.slot = slot;
+    }
+    else if (type === 'orb'){
+      var y = (layer === 'hi' ? hi : 0) + 0.95;
+      var s = add(g, new THREE.SphereGeometry(0.34, 14, 10),
+        M(C_ORB, { emissive: shade(C_ORB, 0.7), ei: 1.2, transparent: true, opacity: 0.95, fog: false }),
+        0, y, 0, { cast: false, recv: false });
+      add(g, new THREE.TorusGeometry(0.55, 0.055, 8, 24),
+        basic(C_ORB, { transparent: true, opacity: 0.5, additive: true, fog: false, depthWrite: false }),
+        0, y, 0, { cast: false, recv: false, rot: [Math.PI / 2, 0, 0] });
+      var ring2 = add(g, new THREE.TorusGeometry(0.80, 0.028, 8, 24),
+        basic(C_ORB, { transparent: true, opacity: 0.34, additive: true, fog: false, depthWrite: false }),
+        0, y, 0, { cast: false, recv: false, rot: [Math.PI / 2, 0, 0] });
+      g.userData.orb = s; g.userData.orbY = y; g.userData.ring2 = ring2;
+    }
+    else if (type === 'decoy'){
+      /* 幽灵闸门：结构与 gate 相同（形似障碍），但用「全息扫描线」材质 —— 可见但明显非实体、可穿 */
+      var bb = (layer === 'hi') ? Obstacle.HI_BAND : Obstacle.LO_BAND;
+      var bh = bb[1] - bb[0], byc = (bb[0] + bb[1]) / 2;
+      add(g, new THREE.BoxGeometry(W, bh, 0.26),
+        M(C_DECOY, { emissive: shade(C_DECOY, 0.55), ei: 0.6, transparent: true, opacity: 0.20, fog: false }),
+        0, byc, 0, { cast: false, recv: false });
+      var sc = basic(0xE0D2FF, { transparent: true, opacity: 0.50, additive: true, fog: false, depthWrite: false });
+      for (var sI = 0; sI < 5; sI++){
+        add(g, new THREE.BoxGeometry(W - 0.25, 0.05, 0.32), sc,
+          0, bb[0] + bh * (0.10 + 0.20 * sI), 0, { cast: false, recv: false });
+      }
+      g.userData.holo = true;
+    }
+    return g;
+  },
+  _alloc: function(type, layer){
+    var key = type + ':' + layer;
+    var f = Obstacle.free[key];
+    if (f && f.length){ var o = f.pop(); o.mesh.visible = true; o.mesh.scale.setScalar(1); return o; }
+    var g = Obstacle.make(type, layer);
+    Obstacle.root.add(g);
+    return { mesh: g, type: type, layer: layer };
+  },
+  _retire: function(o, hard){
+    o.mesh.visible = false; o.mesh.scale.setScalar(1);
+    if (o.type === 'orb' && o.mesh.userData.orb) o.mesh.userData.orb.visible = true;
+    if (hard) { Obstacle.root.remove(o.mesh); return; }
+    var key = o.type + ':' + o.layer;
+    (Obstacle.free[key] = Obstacle.free[key] || []).push(o);
+  },
+  /* 时间跳转（调试 / 门禁用）：把游标推到窗口起点并清空存活集 */
+  seek: function(t){
+    var list = Chart.data ? Chart.data.obstacles : null;
+    Obstacle.reset();
+    if (!list) return;
+    Obstacle.nextIdx = 0;
+    while (Obstacle.nextIdx < list.length && list[Obstacle.nextIdx].t < t - 0.04) Obstacle.nextIdx++;
+  },
+  reset: function(){
+    if (!Obstacle.live) return;
+    for (var i = 0; i < Obstacle.live.length; i++) Obstacle._retire(Obstacle.live[i], false);
+    Obstacle.live.length = 0; Obstacle.nextIdx = 0;
+  },
+  update: function(dt, k, S){
+    if (!Obstacle.mounted || !Track.isCw(k)) return;
+    var ch = Chart.data; if (!ch) return;
+    var list = ch.obstacles, st = Track.songT;
+    if (!list) return;
+    /* ① 生成：谱面时刻进入前视窗即实体化 */
+    while (Obstacle.nextIdx < list.length && list[Obstacle.nextIdx].t <= st + Obstacle.LOOKAHEAD){
+      var d = list[Obstacle.nextIdx++];
+      var o = Obstacle._alloc(d.type, d.layer);
+      o.answer = d.answer; o.t = d.t; o.z = d.z; o.judged = false; o.grade = null; o.fxT = 0;
+      o.mesh.position.set(0, 0, d.z);
+      Obstacle.live.push(o);
+    }
+    /* ② 掠过判定 + 回收（倒序以便安全 splice） */
+    for (var i = Obstacle.live.length - 1; i >= 0; i--){
+      var o2 = Obstacle.live[i];
+      if (!o2.judged && st >= o2.t){
+        o2.judged = true; Judge.cross(o2);
+        if (o2.type === 'decoy') o2.fxT = 0.30;    /* 穿幽灵的「无害火花」：仅视觉，不扣分不断连击 */
+      }
+      if (st > o2.t + Obstacle.RECYCLE){ Obstacle._retire(o2, false); Obstacle.live.splice(i, 1); }
+    }
+    /* ③ 动画：脉冲球浮动 / 误导体闪烁 / 命中脉冲 / 中缝呼吸 */
+    for (var j = 0; j < Obstacle.live.length; j++){
+      var o3 = Obstacle.live[j], ud = o3.mesh.userData;
+      if (o3.type === 'orb' && ud.orb){
+        var ph = o3.t * 2.4;
+        ud.orb.position.y = ud.orbY + Math.sin(T * 2.6 + ph) * 0.10;
+        ud.orb.rotation.y += dt * 1.6;
+        if (ud.ring2){ var pr = 1 + Math.sin(T * 3.4 + ph) * 0.12; ud.ring2.scale.set(pr, pr, pr); }
+      }
+      if (o3.type === 'decoy'){
+        o3.mesh.scale.set(1, 1 + Math.sin(T * 7.0 + o3.t) * 0.02, 1);
+      }
+      if (o3.fxT > 0){
+        o3.fxT = Math.max(0, o3.fxT - dt);
+        var kk = o3.fxT / 0.34;
+        o3.mesh.scale.setScalar(1 + 0.22 * kk);
+      } else if (o3.type !== 'decoy') o3.mesh.scale.setScalar(1);
+    }
+  }
+};
+
+/* ==========================================================================
+   M3-CW · 音游 HUD（RhythmHUD）—— 惰性浮层，仅 causeway 显示
+   --------------------------------------------------------------------------
+   仿 HUD._flash 的惰性策略：首次进入 causeway 才建 DOM；每帧只写文本/类名，零重排。
+   显示：进度条 / 分数 / 准确率 / 收集数 / 连击 / 判定浮字 / 当前层指示。
+   ========================================================================== */
+var RhythmHUD = {
+  el: null, _q: null, _t: 0, _orbTotal: 0,
+  ensure: function(){
+    if (RhythmHUD.el) return RhythmHUD.el;
+    var d = document.createElement('div'); d.id = 'cwhud';
+    d.innerHTML =
+      '<div class="bar"><i></i></div>' +
+      '<div class="sc"><b>0</b><s>ACC 100%</s></div>' +
+      '<div class="orb">◈ 0 / 0</div>' +
+      '<div class="cmb"><b>0</b><s>COMBO</s></div>' +
+      '<div class="ly"><b class="lo">LO · 贴地</b><b class="hi">HI · 悬浮</b></div>' +
+      '<div class="jd"></div>';
+    document.body.appendChild(d);
+    RhythmHUD.el = d;
+    RhythmHUD._q = {
+      bar: d.querySelector('.bar i'), sc: d.querySelector('.sc b'), acc: d.querySelector('.sc s'),
+      orb: d.querySelector('.orb'), cmb: d.querySelector('.cmb b'), jd: d.querySelector('.jd'),
+      lo: d.querySelector('.ly .lo'), hi: d.querySelector('.ly .hi')
+    };
+    RhythmHUD._orbTotal = Chart.data ? Chart.data.obstacles.filter(function(o){ return o.type === 'orb'; }).length : 0;
+    return d;
+  },
+  show: function(on){
+    if (!on && !RhythmHUD.el) return;
+    RhythmHUD.ensure().classList.toggle('on', !!on);
+  },
+  flash: function(grade){
+    RhythmHUD.ensure();                       /* 注意：ensure() 返回 DOM 元素，模块字段走 RhythmHUD._q */
+    var q = RhythmHUD._q;
+    q.jd.textContent = grade === 'perfect' ? 'PERFECT' : (grade === 'good' ? 'GOOD' : 'MISS');
+    q.jd.className = 'jd ' + grade + ' pop';
+    RhythmHUD._t = 0.42;
+  },
+  update: function(dt){
+    var d = RhythmHUD.el; if (!d || d.className.indexOf('on') < 0) return;
+    var q = RhythmHUD._q;
+    /* 谱面晚于 HUD 就绪时补算脉冲球总数 */
+    if (!RhythmHUD._orbTotal && Chart.data)
+      RhythmHUD._orbTotal = Chart.data.obstacles.filter(function(o){ return o.type === 'orb'; }).length;
+    if (RhythmHUD._t > 0){
+      RhythmHUD._t -= dt;
+      if (RhythmHUD._t <= 0) q.jd.className = 'jd ' + (q.jd.className.split(' ')[1] || '');
+    }
+    var dur = Chart.data ? Chart.data.duration : 97.215;
+    q.bar.style.width = (clamp(Track.songT / dur, 0, 1) * 100).toFixed(1) + '%';
+    q.sc.textContent = String(CWScore.score);
+    q.acc.textContent = 'ACC ' + (CWScore.accuracy() * 100).toFixed(1) + '%';
+    q.orb.textContent = '◈ ' + CWScore.orbs + ' / ' + RhythmHUD._orbTotal + (CWScore.decoy ? '   〜' + CWScore.decoy : '');
+    q.cmb.textContent = String(CWScore.combo);
+    var eff = Track.effLayer();
+    q.lo.classList.toggle('on', eff === 'lo');
+    q.hi.classList.toggle('on', eff === 'hi');
+  }
 };
 
 /* ---- 地面波纹（落地 / 收集反馈，GDD §5.2）---- */
@@ -3549,8 +3935,15 @@ var M1 = {
     Lane.reset(k, !FREEZE);          /* M3-OP：吸附到最近道；FREEZE 下保持连续值 ⇒ 定帧不变 */
     Track.reset(k);                  /* M3-CW：回到 Lo 层、清空同调/缓冲/俯仰 */
     CWInput.reset();                 /* M3-CW：清「轻点待判 / 同调长按」状态 */
-    if (k === 'causeway'){ Chart.load(); BGM.start(); }   /* M3-CW：加载真值谱面 + 起播 BGM（待手势） */
-    else BGM.stop();                                      /* 离开单赛道关 → 停 BGM（其余关用内置 kick） */
+    if (k === 'causeway'){
+      Chart.load(); BGM.start();     /* M3-CW：加载真值谱面 + 起播 BGM（待首个用户手势） */
+      CWScore.reset();
+      Obstacle.mount(); Obstacle.reset();   /* FREEZE 下 mount 内部自会跳过 ⇒ 定帧 children 不变 */
+      RhythmHUD.show(true);
+    } else {
+      BGM.stop();                    /* 离开单赛道关 → 停 BGM（其余关沿用内置 kick/hat） */
+      RhythmHUD.show(false);
+    }
     var S = SCN[k], sd = (S && S.scene) ? S.scene.userData : null;
     if (sd && sd.gems){
       for (var i = 0; i < sd.gems.length; i++){
@@ -3621,6 +4014,21 @@ function setupCompare(){
   });
 }
 window.__setScene = setScene;
+/* M3-CW · 调试 / 门禁钩子：把 causeway 跳到指定音乐时刻
+   （同步 角色 z = Track.zOf(t)、BGM 锚点、谱面游标、计分），便于在数秒内验证判定链路 */
+window.__cwSeek = function(t){
+  var S = SCN.causeway;
+  if (!S || !S.hero || !Chart.ready) return false;
+  t = clamp(t, 0, Chart.data.duration - 0.25);
+  S.hero.position.z = Track.zOf(t);
+  Track.reset('causeway');
+  Track.songT = t; Track.lastSwitchT = -99;
+  if (BGM.playing && actx) bgmT0 = actx.currentTime - t;
+  CWScore.reset();
+  Obstacle.mount(); Obstacle.seek(t);
+  RhythmHUD.ensure();
+  return true;
+};
 window.__SCN = SCN; /* 调试钩子：控制台可访问各场景对象 */
 window.__info = function(){
   var out = {};
@@ -3656,7 +4064,13 @@ window.__info = function(){
   out.cw = { chart: Chart.ready, bgm: BGM.playing, audio: actx ? actx.state : null,
              songT: +Track.songT.toFixed(3),
              energy: +Track.energy.toFixed(2), section: (Track.section ? Track.section.kind : null),
-             resonate: CWInput.resonating, zOf: +Track.zOf(Track.songT).toFixed(2) };
+             resonate: CWInput.resonating, zOf: +Track.zOf(Track.songT).toFixed(2),
+             obs: { live: Obstacle.live ? Obstacle.live.length : 0, next: Obstacle.nextIdx,
+                    total: Chart.data ? Chart.data.obstacles.length : 0 },
+             score: { value: CWScore.score, combo: CWScore.combo, maxCombo: CWScore.maxCombo,
+                      perfect: CWScore.perfect, good: CWScore.good, miss: CWScore.miss,
+                      orbs: CWScore.orbs, orbMiss: CWScore.orbMiss, decoy: CWScore.decoy,
+                      acc: +CWScore.accuracy().toFixed(3), rank: CWScore.rank() } };
   return out;
 };
 boot();
