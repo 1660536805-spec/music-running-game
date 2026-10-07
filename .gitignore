@@ -5,7 +5,7 @@
 .workbuddy/
 
 # 本地回滚快照
-声浪星球.pre-batch*.html
+声浪星球.pre-*.html
 声浪星球.batch*.html
 *.bak
 

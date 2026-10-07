@@ -1697,6 +1697,35 @@ function buildDesert(){
   S.add(mtD2);
   S.userData.motes = [mtD1, mtD2];
 
+  /* ========================================================================
+     M1 · 可玩闭环内容（GDD §4.6）：贴地函数导出 + 3 颗可采晶体 + 传送激活台 + 落地波纹
+     全部走 dseq / 纯参数 ⇒ 对全局 rnd() 零消耗，既有构图零漂移 */
+  S.userData.ground = dh;                       /* 供 PlayerController 做贴地采样 */
+
+  var Rg = dseq(0xC011);                         /* §7.5-4 指定种子：独立随机流 */
+  var _gemCols = [[0x58D7EF, 0xD85CEA], [0xD85CEA, 0x9FE9F6], [0x58D7EF, 0xB06EE8]];
+  var gems = [];
+  for (var gi = 0; gi < M1_GEMS.length; gi++){
+    var gx = M1_GEMS[gi][0], gz = M1_GEMS[gi][1];
+    var gm = musicShard(_gemCols[gi][0], _gemCols[gi][1], 0.9 + Rg()*0.2);
+    var gy = dh(gx, gz);
+    gm.position.set(gx, gy + 1.2, gz);
+    gm.rotation.y = Rg()*6.283;
+    gm.userData.groundY = gy;
+    gm.userData.phase = Rg()*6.283;
+    gm.userData.rotY0 = gm.rotation.y;
+    gm.userData.taken = false;
+    Collectible.register(gm);
+    S.add(gm); gems.push(gm);
+  }
+  S.userData.gems = gems;
+
+  var pad = portalPad(2.6);
+  pad.position.set(M1_PAD[0], dh(M1_PAD[0], M1_PAD[1]) + 0.02, M1_PAD[1]);
+  S.add(pad); S.userData.pad = pad;
+
+  VFX.attach(S);                                 /* 1 落地波纹 + 3 收集波纹池（默认隐藏，不占 draw call）*/
+
   return { scene: S, hero: hero, runnable: true };
 }
 
@@ -2225,23 +2254,21 @@ function waveHTML(seed, n){
   }
   return out;
 }
-function musicCard(t, a, cur, total, seed){
+/* §0.4-1 修正：入参 cur 与全局 cur 同名易踩坑 → 改名 elapsed；曲目身份改由 SONGS 驱动 */
+function musicCard(song, elapsed, total){
   return '<div class="hud glass music"><div class="cover"></div><div class="meta">' +
-    '<div class="t">' + t + '</div><div class="a">' + a + '</div>' +
-    '<div class="wave">' + waveHTML(seed, 24) + '</div>' +
-    '<div class="time">' + cur + ' / ' + total + '</div></div></div>';
+    '<div class="t">' + song.name + '</div><div class="a">' + song.artist + '</div>' +
+    '<div class="wave">' + waveHTML(song.wave, 24) + '</div>' +
+    '<div class="time">' + elapsed + ' / ' + total + '</div></div></div>';
 }
 function joystick(){ return '<div class="hud stick"></div>'; }
-function rbtns(){ return '<div class="hud rbtns"><b>跑</b><b class="big">♪</b><b>跳</b></div>'; }
+/* §0.4-2/-3：跑/♪/跳 与 独立跑钮 各自带动作标记，交 Input 分流（不再一律 doJump） */
+function rbtns(){ return '<div class="hud rbtns"><b data-act="run">跑</b><b class="big" data-act="beat">♪</b><b data-act="jump">跳</b></div>'; }
 /* 参考图沙漠右缘中部的独立跑步圆钮 */
-function runBtn(){ return '<div class="hud runbtn glass"><b>跑</b></div>'; }
+function runBtn(){ return '<div class="hud runbtn glass"><b data-act="run">跑</b></div>'; }
 function sideBtns(){ return '<div class="hud side"><b class="glass">▤</b><b class="glass">◇</b><b class="glass">⚙</b></div>'; }
-function taskCard(){
-  return '<div class="hud glass task"><div class="h">探索目标</div>' +
-    '<div class="li"><i class="box done"></i><span>收集 3 个音乐晶体</span><b>1/3</b></div>' +
-    '<div class="li"><i class="box"></i><span>激活传送装置</span><b>0/1</b></div>' +
-    '<div class="li"><i class="box"></i><span>到达山顶</span><b>0/1</b></div></div>';
-}
+/* §0.4-4：任务卡数据化——初始必须 0/3、0/1、0/1（原为硬编码 1/3 与真实状态矛盾） */
+function taskCard(){ return '<div class="hud glass task">' + taskInner() + '</div>'; }
 function resBar(){
   return '<div class="hud glass res"><i><em style="background:#9E5EE8"></em>12</i>' +
     '<i><em style="background:#59C8E8"></em>8</i><i><em style="background:#E8C158"></em>3</i></div>';
@@ -2256,12 +2283,12 @@ var HUD_DEF = {
       '<button data-go="home"><span class="ic">▣</span>星球图鉴</button>' +
       '<button data-go="home"><span class="ic">⚙</span>设置</button></div></div>';
   },
-  desert: function(){ return musicCard('晴天','周杰伦','01:24','04:29',0.4) + taskCard() + joystick() + runBtn() + rbtns(); },
+  desert: function(){ return musicCard(SONGS.sunny, '01:24', '04:29') + taskCard() + joystick() + runBtn() + rbtns(); },
   cave: function(){
-    return musicCard('夜曲','周杰伦','02:08','03:46',2.1) +
-      '<div class="hud glass prompt"><kbd>F</kbd>收集音乐晶体 <em>◆</em></div>' + sideBtns() + joystick();
+    return musicCard(SONGS.nocturne, '02:08', '03:46') +
+      '<div class="hud glass prompt"><kbd>空格</kbd>跳跃 · <kbd>F</kbd>交互 <em>◆</em></div>' + sideBtns() + joystick();
   },
-  base: function(){ return musicCard('稻香','周杰伦','00:36','03:43',4.7) + resBar() + minimap(); }
+  base: function(){ return musicCard(SONGS.rice, '00:36', '03:43') + resBar() + minimap(); }
 };
 
 function buildHUD(){
@@ -2283,9 +2310,44 @@ function buildHUD(){
   Array.prototype.forEach.call(host.querySelectorAll('.menu button'), function(b){
     b.addEventListener('click', function(){ if (!SHOWCASE) setScene(b.getAttribute('data-go')); });
   });
-  Array.prototype.forEach.call(host.querySelectorAll('.rbtns b, .stick'), function(el){
+  /* §0.4-2/-3：HUD 动作分流——跑=冲刺(按住) / 跳=跳跃 / ♪=踩拍 */
+  Array.prototype.forEach.call(host.querySelectorAll('[data-act]'), function(el){
     el.style.pointerEvents = 'auto';
-    el.addEventListener('pointerdown', function(e){ e.stopPropagation(); doJump(); });
+    var act = el.getAttribute('data-act');
+    el.addEventListener('pointerdown', function(e){
+      e.stopPropagation();
+      if (act === 'jump') doJump();
+      else if (act === 'run') Input.btn.sprint = true;
+      else if (act === 'beat') BeatClock.tap();
+      initAudio(); if (actx && actx.state === 'suspended') actx.resume();
+      m1Sfx('uiClick');
+    });
+    function releaseRun(){ if (act === 'run') Input.btn.sprint = false; }
+    el.addEventListener('pointerup', releaseRun);
+    el.addEventListener('pointerleave', releaseRun);
+    el.addEventListener('pointercancel', releaseRun);
+  });
+  /* 虚拟摇杆 → 移动轴向（GDD §5.1） */
+  Array.prototype.forEach.call(host.querySelectorAll('.stick'), function(el){
+    el.style.pointerEvents = 'auto';
+    var pid = null;
+    function setFrom(ev){
+      var r = el.getBoundingClientRect();
+      var dx = (ev.clientX - (r.left + r.width/2)) / (r.width/2);
+      var dy = (ev.clientY - (r.top + r.height/2)) / (r.height/2);
+      var m = Math.max(1, Math.sqrt(dx*dx + dy*dy));
+      Input.stick.x = dx/m; Input.stick.z = dy/m;
+    }
+    el.addEventListener('pointerdown', function(e){
+      e.stopPropagation(); pid = e.pointerId;
+      try { el.setPointerCapture(pid); } catch(_e){}
+      initAudio(); if (actx && actx.state === 'suspended') actx.resume();
+      setFrom(e);
+    });
+    el.addEventListener('pointermove', function(e){ if (pid === e.pointerId) setFrom(e); });
+    function end(e){ if (pid === e.pointerId || pid === null){ pid = null; Input.stick.x = 0; Input.stick.z = 0; } }
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
   });
 }
 
@@ -2293,21 +2355,34 @@ function buildHUD(){
    5. 场景切换 / 玩法
    ========================================================================== */
 var cur = (STARTKEY === 'showcase') ? 'home' : STARTKEY;
-var jump = { y: 0, v: 0, on: false };
+var jump = { y: 0, v: 0, on: false, perfect: false };
 function setScene(k){
   if (!SCN[k]) return;
   cur = k;
+  M1.enter(k);
   buildHUD();
   var S = SCN[k];
-  if (S.hero){ S.hero.position.set(S.hero.home.x, S.hero.home.y, S.hero.home.z); }
-  jump.y = 0; jump.v = 0;
+  if (S.hero){
+    S.hero.position.set(S.hero.home.x, S.hero.home.y, S.hero.home.z);
+    /* 复位到构建期基准：baseY0 / rotY0 在 boot 里记录，保证切景往返后逐位可复现 */
+    if (S.hero.userData.baseY0 != null) S.hero.userData.baseY = S.hero.userData.baseY0;
+    if (S.hero.userData.rotY0 != null) S.hero.rotation.y = S.hero.userData.rotY0;
+  }
+  jump.y = 0; jump.v = 0; jump.on = false; jump.perfect = false;
+  last = performance.now();
 }
 function doJump(){
   var S = SCN[cur];
   if (!S || !S.runnable) return;
   initAudio();
   if (actx && actx.state === 'suspended') actx.resume();
-  if (!jump.on){ jump.v = 6.0; jump.on = true; }
+  if (!jump.on){
+    /* §3.2 踩点：窗口内起跳用 V0_PERFECT，否则常规 V0；未踩点不给正反馈 */
+    jump.perfect = BeatClock.inWindow();
+    jump.v = jump.perfect ? CFG.V0_PERFECT : CFG.V0;
+    jump.on = true;
+    m1Sfx(jump.perfect ? 'beatPerfect' : 'jump');
+  }
 }
 
 /* 音频（保留音乐节拍逻辑） */
@@ -2340,16 +2415,21 @@ function scheduleAudio(){
   while (nextBeat < actx.currentTime + 0.18){
     kick(nextBeat); if (beatCount % 2 === 1) hat(nextBeat);
     beatCount++; nextBeat += 60/bpm;
+    BeatClock.onKick();   /* §7.5-7：在 kick 处广播 beat，供踩点窗口对齐 */
   }
 }
+/* §7.5-1：键盘统一汇入 Input.keys；跳跃保持 空格/↑；F 改绑为交互/收集（§0.4-1） */
 addEventListener('keydown', function(e){
+  Input.keys[e.code] = true;
   if (e.code === 'Space' || e.code === 'ArrowUp'){ e.preventDefault(); doJump(); }
   if (e.key === '1') setScene('home');
   if (e.key === '2') setScene('desert');
   if (e.key === '3') setScene('cave');
   if (e.key === '4') setScene('base');
-  if (e.key === 'f' || e.key === 'F') doJump();
+  if (e.key === 'f' || e.key === 'F') M1.interact();
 });
+addEventListener('keyup', function(e){ Input.keys[e.code] = false; });
+addEventListener('blur', function(){ Input.keys = {}; Input.btn.sprint = false; Input.stick.x = 0; Input.stick.z = 0; });
 renderer.domElement.addEventListener('pointerdown', function(){
   initAudio(); if (actx && actx.state === 'suspended') actx.resume(); doJump();
 });
@@ -2460,11 +2540,19 @@ function updateScene(k, dt){
   }
   if (S.hero){
     if (jump.on){
-      jump.v -= 18*dt; jump.y += jump.v*dt;
-      if (jump.y <= 0){ jump.y = 0; jump.v = 0; jump.on = false; }
+      jump.v -= CFG.G*dt; jump.y += jump.v*dt;
+      if (jump.y <= 0){
+        jump.y = 0; jump.v = 0; jump.on = false;
+        if (k === 'desert'){
+          /* §5.2：仅踩点跳给地面波纹（未踩点靠"没有正反馈"体现） */
+          if (jump.perfect) VFX.land(S.hero.position.x, S.hero.userData.baseY + 0.06, S.hero.position.z);
+          m1Sfx('land');
+        }
+        jump.perfect = false;
+      }
     }
     S.hero.position.y = S.hero.userData.baseY + jump.y;
-    poseHero(S.hero, (k === 'desert' || k === 'cave') ? 'run' : 'idle', T + (k === 'cave' ? 3.2 : 0), jump.y);
+    poseHero(S.hero, PlayerController.mode(k), T + (k === 'cave' ? 3.2 : 0), jump.y);
     var sh = S.hero.userData.shadow;
     if (sh){ var kk = 1 - Math.min(0.6, jump.y*0.15); sh.scale.setScalar(kk); sh.material.opacity = kk; }
   }
@@ -2491,6 +2579,16 @@ function loop(now){
       for (var i = 0; i < RENDER_ORDER.length; i++) updateScene(RENDER_ORDER[i], dt);
       renderShowcase();
     } else {
+      /* GDD §6.3 每帧顺序：Input → BeatClock → PlayerController → Collectible → Portal
+         → VFX →（既有）updateScene。FREEZE 下整段跳过 ⇒ 对定帧零影响 */
+      if (!FREEZE){
+        Input.poll();
+        BeatClock.update(dt);
+        PlayerController.update(dt, cur, SCN[cur]);
+        Collectible.update(dt, cur, SCN[cur]);
+        Portal.update(dt, cur, SCN[cur]);
+        VFX.update(dt);
+      }
       updateScene(cur, dt);
       renderer.setViewport(0, 0, innerWidth, innerHeight);
       renderer.setScissorTest(false);
@@ -2498,6 +2596,7 @@ function loop(now){
     }
   }
   if (!FREEZE) scheduleAudio();
+  HUD.sync();   /* §7.5-8：仅数据变化时重渲染任务卡 */
   if (DBG){
     document.getElementById('dbg').classList.add('on');
     document.getElementById('dbg').textContent =
@@ -2514,6 +2613,397 @@ addEventListener('resize', function(){
 });
 
 /* ==========================================================================
+   6.5 M1 · 可玩闭环（desert 跑跳收集）—— GDD §7.5 八项 + §0.4 五项
+   --------------------------------------------------------------------------
+   设计约束（红线 §0.3）：
+     · 新增物体全部走 dseq / 纯参数 ⇒ 全局 rnd() 随机序列零漂移；
+     · 静止时对 hero 零写入 ⇒ 四场景 heroC 逐位不变；
+     · 玩法对象只"叠加"，不动既有地物、不动定帧机位基准值。
+   ========================================================================== */
+
+/* ---- 手感 / 数值（GDD §3.9 Tuning Sheet）---- */
+var CFG = {
+  SPEED_F: 4.5, SPEED_S: 1.6, SPRINT: 1.6,      /* 前进 / 横移 (u/s)、冲刺倍率 */
+  V0: 6.0, V0_PERFECT: 7.2, G: 18,              /* 跳跃初速 / 踩点加成 / 重力 */
+  W_BEAT: 0.09,                                 /* 拍点窗口（占单拍比例）*/
+  R_COLLECT: 2.5, R_PORTAL: 3.0,                /* 吸附 / 传送判定半径 */
+  ACC: 0.12, DEC: 0.10, FADE: 0.35,             /* 起停缓动 / 白闪时长 */
+  X_MIN: -7.0, X_MAX: 7.0, Z_MIN: -24.0, Z_MAX: 1.0   /* 浅纵深轻量关可玩带 */
+};
+
+/* ---- 曲库（GDD §3.6）---- */
+var SONGS = {
+  sunny:    { name: '晴天', artist: '周杰伦', bpm: 118, total: '04:29', wave: 0.4 },
+  nocturne: { name: '夜曲', artist: '周杰伦', bpm: 126, total: '03:46', wave: 2.1 },
+  rice:     { name: '稻香', artist: '周杰伦', bpm: 110, total: '03:43', wave: 4.7 }
+};
+
+/* ---- 关卡定义（GDD §4.2 / §4.6）----
+   浅纵深轻量关：晶体的 z 被压缩进可玩带，x 布局签名沿用 §4.6（2.0 / −3.5 / 3.5）*/
+var M1_GEMS = [[2.0, -8.0], [-3.5, -14.0], [3.5, -20.0]];
+var M1_PAD  = [1.0, -23.0];
+var LEVELS = {
+  desert: { song: 'sunny', spawn: [0.6, -1.5],
+            tasks: [ { id: 'gems',   label: '收集 3 个音乐晶体', need: 3 },
+                     { id: 'portal', label: '激活传送装置',     need: 1 },
+                     { id: 'summit', label: '到达山顶',         need: 1 } ] },
+  cave:   { song: 'nocturne', spawn: null, tasks: [ { id: 'gems', label: '收集 3 个音乐晶体', need: 3 } ] },
+  base:   { song: 'rice',     spawn: null, tasks: [] }
+};
+
+/* ---- 轻量事件总线（GDD §6.5）---- */
+var Bus = (function(){
+  var m = {};
+  return {
+    on: function(ev, fn){ (m[ev] = m[ev] || []).push(fn); },
+    emit: function(ev, d){ var a = m[ev]; if (a) for (var i = 0; i < a.length; i++){ try { a[i](d); } catch(e){} } }
+  };
+})();
+
+/* ---- 局内状态（GDD §6.2，可序列化）---- */
+var GameState = {
+  level: 'desert', counters: {}, portal: 'dormant',
+  reset: function(k){
+    GameState.level = k;
+    GameState.counters = {};
+    var lv = LEVELS[k];
+    if (lv) for (var i = 0; i < lv.tasks.length; i++) GameState.counters[lv.tasks[i].id] = 0;
+    GameState.portal = 'dormant';
+  },
+  add: function(id, n){
+    GameState.counters[id] = (GameState.counters[id] || 0) + (n == null ? 1 : n);
+    Bus.emit('progress', { id: id, value: GameState.counters[id] });
+    return GameState.counters[id];
+  },
+  get: function(id){ return GameState.counters[id] || 0; },
+  taskDone: function(t){ return GameState.get(t.id) >= t.need; }
+};
+
+/* ---- 输入抽象（GDD §5.1 / §6.8）——键盘在既有 keydown 处接线 ---- */
+var Input = {
+  enabled: true, keys: {}, stick: { x: 0, z: 0 }, move: { x: 0, z: 0 },
+  sprint: false, btn: { sprint: false },
+  poll: function(){
+    var k = Input.keys, mx = 0, mz = 0;
+    if (Input.enabled){
+      if (k['KeyW']) mz -= 1;
+      if (k['KeyS']) mz += 1;
+      if (k['KeyA']) mx -= 1;
+      if (k['KeyD']) mx += 1;
+    }
+    mx += Input.stick.x; mz += Input.stick.z;
+    var l = Math.sqrt(mx*mx + mz*mz);
+    if (l > 1){ mx /= l; mz /= l; }
+    Input.move.x = mx; Input.move.z = mz;
+    Input.sprint = !!(k['ShiftLeft'] || k['ShiftRight'] || Input.btn.sprint);
+  }
+};
+
+/* ---- 节拍时钟（GDD §3.2 / §6.6）——音频在跑时锁到 kick，否则自由拍 ---- */
+var BeatClock = {
+  bpm: 118, phase: 0, index: 0,
+  setSong: function(s){ if (!s) return; BeatClock.bpm = s.bpm; bpm = s.bpm; BeatClock.phase = 0; },
+  update: function(dt){
+    var bp = 60 / BeatClock.bpm;
+    if (actx && actx.state === 'running'){
+      var since = bp - (nextBeat - actx.currentTime);
+      BeatClock.phase = (((since % bp) + bp) % bp) / bp;
+    } else if (dt > 0){
+      BeatClock.phase += dt / bp;
+      while (BeatClock.phase >= 1) BeatClock.phase -= 1;
+    }
+  },
+  onKick: function(){ BeatClock.index++; Bus.emit('beat', { index: BeatClock.index, strong: true }); },
+  inWindow: function(){ var p = BeatClock.phase; return p <= CFG.W_BEAT || p >= 1 - CFG.W_BEAT; },
+  tap: function(){ Bus.emit('beatTap', {}); }
+};
+
+/* ---- 局内 SFX（GDD §6.6，汇入既有 master，不随 bpm 变速）---- */
+function m1Sfx(kind){
+  if (!actx) return;
+  var t = actx.currentTime;
+  try {
+    function tone(type, f0, f1, dur, vol){
+      var o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f0, t);
+      if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
+      g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.02);
+    }
+    if (kind === 'collect'){
+      for (var i = 0; i < 3; i++){
+        var o = actx.createOscillator(), g = actx.createGain();
+        o.type = 'triangle'; o.frequency.setValueAtTime(523.25 * Math.pow(2, i*4/12), t + i*0.06);
+        g.gain.setValueAtTime(0.0001, t + i*0.06);
+        g.gain.exponentialRampToValueAtTime(0.45, t + i*0.06 + 0.012);
+        g.gain.exponentialRampToValueAtTime(0.001, t + i*0.06 + 0.22);
+        o.connect(g); g.connect(master); o.start(t + i*0.06); o.stop(t + i*0.06 + 0.24);
+      }
+    }
+    else if (kind === 'beatPerfect') tone('square', 1760, 1760, 0.08, 0.32);
+    else if (kind === 'jump')        tone('sine', 320, 620, 0.12, 0.20);
+    else if (kind === 'land')        tone('sine', 160, 70, 0.14, 0.24);
+    else if (kind === 'portalGo')    tone('sawtooth', 220, 1320, 0.55, 0.26);
+    else if (kind === 'uiClick')     tone('triangle', 880, 880, 0.06, 0.16);
+  } catch(e){}
+}
+
+/* ---- 地面波纹（落地 / 收集反馈，GDD §5.2）---- */
+function groundRipple(){
+  var m = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.18, 32, 1),
+    basic(0xEAFBFF, { transparent: true, opacity: 0, additive: true, side: THREE.DoubleSide, depthWrite: false, fog: false }));
+  m.rotation.x = -Math.PI/2; m.visible = false;
+  return m;
+}
+var VFX = {
+  _land: null, _pool: [], _i: 0,
+  attach: function(S){
+    VFX._land = groundRipple(); S.add(VFX._land);
+    VFX._pool = [];
+    for (var i = 0; i < 3; i++){ var r = groundRipple(); S.add(r); VFX._pool.push(r); }
+  },
+  _fire: function(mesh, x, y, z, r0, r1, life, op){
+    mesh.visible = true; mesh.position.set(x, y, z); mesh.scale.setScalar(r0);
+    mesh.material.opacity = op;
+    mesh.userData.vf = { t: 0, life: life, r0: r0, r1: r1, op: op };
+  },
+  land:  function(x, y, z){ if (VFX._land) VFX._fire(VFX._land, x, y, z, 0.55, 3.2, 0.5, 0.7); },
+  burst: function(x, y, z){
+    if (!VFX._pool.length) return;
+    var m = VFX._pool[VFX._i++ % VFX._pool.length];
+    VFX._fire(m, x, y, z, 0.35, 2.4, 0.42, 0.85);
+  },
+  update: function(dt){
+    function step(m){
+      if (!m || !m.visible) return;
+      var v = m.userData.vf; v.t += dt;
+      var kk = v.t / v.life;
+      if (kk >= 1){ m.visible = false; m.material.opacity = 0; return; }
+      m.scale.setScalar(v.r0 + (v.r1 - v.r0)*kk);
+      m.material.opacity = v.op * (1 - kk);
+    }
+    step(VFX._land);
+    for (var i = 0; i < VFX._pool.length; i++) step(VFX._pool[i]);
+  }
+};
+
+/* ---- 零 rnd、单 drawcall 音乐晶体（3 棱锥合并为一份几何；GDD §7.5-4）---- */
+function musicShard(cMain, cTip, glow){
+  var parts = [
+    [0.30, 1.30, 5,  0.00, 0.65,  0.00,  0.0],
+    [0.18, 0.86, 5, -0.24, 0.43,  0.08,  0.9],
+    [0.16, 0.74, 5,  0.22, 0.37, -0.06, -0.7]
+  ];
+  var P = [], N = [], C = [];
+  var mtx = new THREE.Matrix4(), nm = new THREE.Matrix3(), v = new THREE.Vector3();
+  var cA = new THREE.Color(cMain), cB = new THREE.Color(cTip), cc = new THREE.Color();
+  for (var i = 0; i < parts.length; i++){
+    var p = parts[i];
+    var g = new THREE.ConeGeometry(p[0], p[1], p[2], 1).toNonIndexed();
+    var pa = g.attributes.position.array, na = g.attributes.normal.array;
+    mtx.makeRotationY(p[6]); mtx.setPosition(p[3], p[4], p[5]);
+    nm.getNormalMatrix(mtx);
+    for (var j = 0; j < pa.length; j += 3){
+      v.set(pa[j], pa[j+1], pa[j+2]).applyMatrix4(mtx); P.push(v.x, v.y, v.z);
+      v.set(na[j], na[j+1], na[j+2]).applyMatrix3(nm).normalize(); N.push(v.x, v.y, v.z);
+      var tt = clamp((pa[j+1] + p[1]*0.5) / p[1], 0, 1);
+      cc.copy(cA).lerp(cB, tt*tt); C.push(cc.r, cc.g, cc.b);
+    }
+    g.dispose();
+  }
+  var geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+  geo.setAttribute('normal',   new THREE.Float32BufferAttribute(N, 3));
+  geo.setAttribute('color',    new THREE.Float32BufferAttribute(C, 3));
+  var mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({
+    vertexColors: true, flatShading: true,
+    emissive: shade(cMain, 0.55), emissiveIntensity: glow,
+    transparent: true, opacity: 0.94
+  }));
+  mesh.castShadow = true;
+  mesh.userData.cMain = cMain; mesh.userData.cTip = cTip;
+  return mesh;
+}
+
+/* ---- 传送激活台（GDD §4.6 推荐方案：门正下方新增发光圆台，天空环门作远景呼应）---- */
+function portalPad(r){
+  var g = new THREE.Group();
+  add(g, new THREE.CylinderGeometry(r, r*1.06, 0.18, 24, 1),
+    M(0xEAF6FF, { emissive: shade(0x9FEBFF, 0.5), ei: 0.8, transparent: true, opacity: 0.86 }),
+    0, 0.09, 0, { cast: false });
+  var ring = add(g, new THREE.TorusGeometry(r*1.12, 0.12, 8, 28),
+    M(0x9FEBFF, { emissive: shade(0x9FEBFF, 0.7), ei: 1.1, transparent: true, opacity: 0.32 }),
+    0, 0.16, 0, { cast: false, recv: false, rot: [Math.PI/2, 0, 0] });
+  g.userData.ring = ring; g.userData.t = 0;
+  return g;
+}
+
+/* ---- 任务卡内容（数据驱动，GDD §5.3 / §7.5-6）---- */
+function taskInner(){
+  var lv = LEVELS[cur], tasks = (lv && lv.tasks) ? lv.tasks : [];
+  var h = '<div class="h">探索目标</div>';
+  for (var i = 0; i < tasks.length; i++){
+    var t = tasks[i], v = GameState.get(t.id);
+    h += '<div class="li"><i class="box' + (v >= t.need ? ' done' : '') + '"></i><span>' +
+         t.label + '</span><b>' + v + '/' + t.need + '</b></div>';
+  }
+  return h;
+}
+
+/* ---- 收集（GDD §3.3 / §7.5-5）---- */
+function m1Collect(g){
+  if (!g || g.userData.taken) return;
+  g.userData.taken = true; g.visible = false;
+  TaskSystem.progress('gems', 1);
+  VFX.burst(g.position.x, g.userData.groundY + 0.12, g.position.z);
+  m1Sfx('collect');
+  if (GameState.get('gems') >= 3 && GameState.portal === 'dormant'){
+    GameState.portal = 'charged';
+    Bus.emit('portal:charged', {});
+    m1Sfx('beatPerfect');
+  }
+}
+var Collectible = {
+  register: function(mesh){ mesh.userData.collectible = true; },
+  update: function(dt, k, S){
+    if (k !== 'desert' || !S || !S.scene) return;
+    var gs = S.scene.userData.gems;
+    if (!gs) return;
+    var h = S.hero; if (!h) return;
+    for (var i = 0; i < gs.length; i++){
+      var g = gs[i]; if (g.userData.taken) continue;
+      g.rotation.y += dt * 1.4;
+      g.position.y = g.userData.groundY + 1.2 + Math.sin(T*1.7 + g.userData.phase)*0.16;
+      var dx = g.position.x - h.position.x, dz = g.position.z - h.position.z;
+      if (dx*dx + dz*dz <= CFG.R_COLLECT*CFG.R_COLLECT) m1Collect(g);
+    }
+  }
+};
+
+/* ---- 任务与进度（GDD §3.5 / §7.5-6）---- */
+var TaskSystem = {
+  progress: function(id, n){ return GameState.add(id, n); },
+  isClear: function(k){
+    var lv = LEVELS[k]; if (!lv) return true;
+    for (var i = 0; i < lv.tasks.length; i++) if (!GameState.taskDone(lv.tasks[i])) return false;
+    return true;
+  }
+};
+
+/* ---- 传送装置状态机（GDD §3.4）：dormant → charged → activated ---- */
+var Portal = {
+  update: function(dt, k, S){
+    if (k !== 'desert' || !S || !S.scene || !S.hero) return;
+    var pad = S.scene.userData.pad;
+    if (!pad) return;
+    var st = GameState.portal;
+    pad.userData.t += dt;
+    pad.scale.setScalar(1 + Math.sin(pad.userData.t*2.2)*0.05);
+    var ring = pad.userData.ring;
+    if (ring) ring.material.opacity = st === 'dormant' ? 0.32 : (st === 'charged' ? 0.9 : 1.0);
+    if (S.hero.position.z <= -18 && GameState.get('summit') < 1) TaskSystem.progress('summit', 1);
+    if (st === 'charged'){
+      var dx = pad.position.x - S.hero.position.x, dz = pad.position.z - S.hero.position.z;
+      if (dx*dx + dz*dz <= CFG.R_PORTAL*CFG.R_PORTAL){
+        GameState.portal = 'activated';
+        GameState.add('portal', 1);
+        Bus.emit('portal:go', {});
+        m1Sfx('portalGo'); HUD.flash(CFG.FADE);
+        setTimeout(function(){ setScene('cave'); }, 380);
+      }
+    }
+  }
+};
+
+/* ---- 角色位移 + 贴地（GDD §3.1 / §7.5-2；红线：只改 x/z，y 交给 poseHero）---- */
+var PlayerController = {
+  vx: 0, vz: 0, moved: false,
+  reset: function(){ PlayerController.vx = 0; PlayerController.vz = 0; PlayerController.moved = false; },
+  mode: function(k){ return (k === 'desert' || k === 'cave') ? 'run' : 'idle'; },
+  update: function(dt, k, S){
+    if (dt <= 0 || k !== 'desert') return;                 /* M1：仅 desert 可自由移动 */
+    if (!S || !S.runnable || !S.hero || !S.scene || !S.scene.userData.ground) return;
+    var ground = S.scene.userData.ground;
+    var mx = Input.move.x, mz = Input.move.z, l = Math.sqrt(mx*mx + mz*mz);
+    var sp = Input.sprint ? CFG.SPEED_F*CFG.SPRINT : CFG.SPEED_F;
+    var tvx = 0, tvz = 0;
+    if (l > 0){ mx /= l; mz /= l; tvx = mx*sp; tvz = mz*sp; }
+    var kk = 1 - Math.exp(-(l > 0 ? 1/CFG.ACC : 1/CFG.DEC) * dt);
+    PlayerController.vx += (tvx - PlayerController.vx) * kk;
+    PlayerController.vz += (tvz - PlayerController.vz) * kk;
+    /* 静止零写入：从未移动且无输入 ⇒ 立即返回，保证形变/位移零发生 */
+    if (!PlayerController.moved && l === 0 &&
+        Math.abs(PlayerController.vx) < 1e-4 && Math.abs(PlayerController.vz) < 1e-4) return;
+    var h = S.hero;
+    h.position.x = clamp(h.position.x + PlayerController.vx*dt, CFG.X_MIN, CFG.X_MAX);
+    h.position.z = clamp(h.position.z + PlayerController.vz*dt, CFG.Z_MIN, CFG.Z_MAX);
+    if (l > 0) h.rotation.y = Math.atan2(-mx, -mz);        /* 模型默认正面 = −z */
+    h.userData.baseY = ground(h.position.x, h.position.z);
+    PlayerController.moved = true;
+  }
+};
+
+/* ---- HUD 接线（GDD §5.3 / §7.5-8）：只在数据变化时重渲染 ---- */
+var HUD = {
+  dirty: false, _flash: null,
+  markDirty: function(){ HUD.dirty = true; },
+  sync: function(){
+    if (!HUD.dirty) return;
+    HUD.dirty = false;
+    if (SHOWCASE) return;
+    var host = document.getElementById('huds');
+    var t = host && host.querySelector('.hudLayer .task');
+    if (t) t.innerHTML = taskInner();
+  },
+  flash: function(sec){
+    var f = HUD._flash;
+    if (!f){
+      f = document.createElement('div');
+      f.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;background:#EAFBFF;' +
+        'opacity:0;pointer-events:none;z-index:9999;transition:opacity .18s ease';
+      document.body.appendChild(f); HUD._flash = f;
+    }
+    f.style.opacity = '0.85';
+    setTimeout(function(){ f.style.opacity = '0'; }, Math.max(80, (sec || 0.35)*1000*0.5));
+  }
+};
+
+/* ---- M1 模块入口 ---- */
+var M1 = {
+  enter: function(k){
+    GameState.reset(k);
+    PlayerController.reset();
+    var S = SCN[k], sd = (S && S.scene) ? S.scene.userData : null;
+    if (sd && sd.gems){
+      for (var i = 0; i < sd.gems.length; i++){
+        var g = sd.gems[i];
+        g.userData.taken = false; g.visible = true;
+        g.rotation.y = g.userData.rotY0 || 0;
+        g.position.y = g.userData.groundY + 1.2;
+      }
+    }
+    if (sd && sd.pad){ sd.pad.userData.t = 0; sd.pad.scale.setScalar(1); }
+    BeatClock.setSong(SONGS[(LEVELS[k] && LEVELS[k].song) || 'sunny']);
+    HUD.markDirty();
+  },
+  interact: function(){
+    var S = SCN[cur];
+    if (!S || !S.hero || !S.scene) return;
+    var gs = S.scene.userData.gems;
+    if (gs){
+      var rr2 = (CFG.R_COLLECT*1.8)*(CFG.R_COLLECT*1.8);
+      for (var i = 0; i < gs.length; i++){
+        var g = gs[i]; if (g.userData.taken) continue;
+        var dx = g.position.x - S.hero.position.x, dz = g.position.z - S.hero.position.z;
+        if (dx*dx + dz*dz <= rr2){ m1Collect(g); return; }
+      }
+    }
+    m1Sfx('uiClick');
+  }
+};
+Bus.on('progress', function(){ HUD.markDirty(); });
+
+/* ==========================================================================
    7. 启动
    ========================================================================== */
 function boot(){
@@ -2522,7 +3012,12 @@ function boot(){
   srand(0x9B31F7); SCN.cave   = buildCave();
   srand(0x77E2D9); SCN.base   = buildBase();
   RENDER_ORDER.forEach(function(k){
-    if (SCN[k].hero) SCN[k].hero.home = SCN[k].hero.position.clone();
+    if (SCN[k].hero){
+      SCN[k].hero.home = SCN[k].hero.position.clone();
+      /* 记录构建期基准，供 setScene 往返复位（保证 heroC 逐位可复现） */
+      SCN[k].hero.userData.baseY0 = SCN[k].hero.userData.baseY;
+      SCN[k].hero.userData.rotY0 = SCN[k].hero.rotation.y;
+    }
   });
   setupCameras();
   scenesReady = true;
@@ -2566,8 +3061,14 @@ window.__info = function(){
     out[k] = e;
   });
   out.calls = renderer.info.render.calls; out.tris = renderer.info.render.triangles;
-  out.jump = { on: jump.on, y: +jump.y.toFixed(3), v: +jump.v.toFixed(3) };
+  out.jump = { on: jump.on, y: +jump.y.toFixed(3), v: +jump.v.toFixed(3), perfect: !!jump.perfect };
   out.cur = cur;
+  var _lv = LEVELS[cur], _t = {};
+  if (_lv) for (var _i = 0; _i < _lv.tasks.length; _i++) _t[_lv.tasks[_i].id] = GameState.get(_lv.tasks[_i].id) + '/' + _lv.tasks[_i].need;
+  out.m1 = { mode: PlayerController.mode(cur), portal: GameState.portal, gems: GameState.get('gems'),
+             tasks: _t, beat: +BeatClock.phase.toFixed(3), inWin: BeatClock.inWindow(),
+             heroX: SCN[cur] && SCN[cur].hero ? +SCN[cur].hero.position.x.toFixed(3) : null,
+             heroZ: SCN[cur] && SCN[cur].hero ? +SCN[cur].hero.position.z.toFixed(3) : null };
   return out;
 };
 boot();
