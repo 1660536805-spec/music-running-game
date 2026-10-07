@@ -12,7 +12,8 @@
      ⑥ 段落镜头（P4）：lensCues 全落 4 小节线·乐句唯一 / 越过 cue 后镜头按谱面切换
      ⑦ 预判押注（P4）：段界前 2 拍开窗·走向符号符谱 / 窗口内长按→押对 amo=1.5 / 不押→amo=1.0
      ⑧ 同调长按（P4）：长音结束拍点松手→Perfect，同调倍率 mult ∈ (1, 1.5]
-     ⑨ 零控制台报错
+     ⑨ 选定态：曲终自动弹出结算面板（评级口径 S 需 miss=0）/ 面板大字与 info 一致 / 返回枢纽回流
+     ⑩ 零控制台报错
    用法: node tools/causeway.js [--record]
    ============================================================================ */
 'use strict';
@@ -216,6 +217,34 @@ const URL = 'http://127.0.0.1:8777/%E5%A3%B0%E6%B5%AA%E6%98%9F%E7%90%83.html';
     if (!(rs.reso.perfect >= 1)) fails.push('⑬ 结束拍点松手未判 Perfect: ' + JSON.stringify(rs.reso));
     if (!(rs.score.mult > 1 && rs.score.mult <= 1.5)) fails.push('⑬ 同调倍率越界: ' + rs.score.mult);
   }
+
+  /* ---- ⑭ 结算面板（P5）：曲终自动弹出 + 评级口径 + 按钮回流 ---- */
+  console.log('=== causeway · 结算面板 ===');
+  const dur = await page.evaluate(() => (window.__cwChart() || {}).duration || 0);
+  const rsBefore = (await cwInfo()).result;
+  if (!rsBefore) fails.push('⑭ __info().cw.result 缺失（P5 未接线）');
+  else if (rsBefore.open !== false) fails.push('⑭ 曲未终时结算面板不应打开: ' + JSON.stringify(rsBefore));
+  await seek(dur - 0.2);                                /* 逼近曲终（内部 clamp 到 dur−0.25） */
+  await page.waitForTimeout(900);                       /* 越过 dur−0.05 触发阈值 */
+  const now = await cwInfo();
+  const rs = now.result, rsScore = now.score;
+  console.log('曲终:', JSON.stringify(rs), ' score.rank=' + rsScore.rank + ' miss=' + rsScore.miss);
+  if (!rs || rs.open !== true) fails.push('⑭ 曲终未弹出结算面板: ' + JSON.stringify(rs));
+  if (rs && rs.rank !== rsScore.rank) fails.push('⑭ 面板评级 ≠ 计分口径: ' + rs.rank + ' ≠ ' + rsScore.rank);
+  if (rsScore.miss !== 0 && rs && rs.rank === 'S') fails.push('⑭ 有 Miss 却评 S（口径应要求 miss=0）');
+  const domRank = await page.evaluate(() => { var e = document.querySelector('#cwres .rk'); return e ? e.textContent.trim() : null; });
+  const domOn = await page.evaluate(() => !!document.querySelector('#cwres.on'));
+  if (!domOn) fails.push('⑭ 结算面板 DOM 未激活（#cwres.on 未挂）');
+  if (domRank !== (rs && rs.rank)) fails.push('⑭ 面板大字评级与 info 不一致: ' + domRank + ' ≠ ' + (rs && rs.rank));
+  await page.screenshot({ path: path.join(OUT, 'cw-p5-result.png') });
+  /* 返回枢纽：面板关闭 + 场景切回 home（验证按钮回流 + 面板不残留） */
+  await page.evaluate(() => { var b = document.querySelector('#cwres .bts b[data-act="home"]'); if (b) b.click(); });
+  await page.waitForTimeout(500);
+  const after = await page.evaluate(() => ({ cur: window.__info().cur,
+    open: window.__info().cw.result.open, on: !!document.querySelector('#cwres.on') }));
+  console.log('返回枢纽:', JSON.stringify(after));
+  if (after.cur !== 'home') fails.push('⑭ 返回枢纽未切到 home: ' + after.cur);
+  if (after.open !== false || after.on) fails.push('⑭ 返回枢纽后面板未关闭: ' + JSON.stringify(after));
 
   if (errs.length) { console.log('ERRORS:\n' + errs.join('\n')); fails.push(errs.length + ' 条控制台报错'); }
   console.log(fails.length ? ('\n✗ FAIL\n  - ' + fails.join('\n  - ')) : '\n✓ PASS (causeway)');
