@@ -1474,17 +1474,17 @@ function buildHome(){
      crystalCluster 内 rnd 调用次数不变 → 全局随机序列零漂移。 */
   var yc = crystalCluster({ h: 1.1, color: 0xE7BE55, color2: 0xF0D27A, n: 2, sides: 5, glow: 0.5 });
   yc.position.set(-1.15, gh(-1.15, 1.15), 1.15); S.add(yc);
-  var pk = crystalCluster({ h: 2.4, color: 0xF06FB4, color2: 0x8FD8EE, n: 3, sides: 5, glow: 0.5 });
-  pk.position.set(7.2, gh(7.2, 2.4), 2.4); S.add(pk);
+  var pk = crystalCluster({ h: 1.7, color: 0xF06FB4, color2: 0x8FD8EE, n: 3, sides: 5, glow: 0.5 });
+  pk.position.set(7.6, gh(7.6, 3.0), 3.0); S.add(pk);
   /* 近景右下亮粉晶簇：补参考图底缘的粉色水晶焦点（gemCluster 确定性、零 rnd 消耗） */
-  var pkA = gemCluster(2.6, 0xF06FB4, 0xF7B0D8, 0.90);
-  pkA.position.set(6.4, gh(6.4, 1.5), 1.5); S.add(pkA);
-  var pkB = gemCluster(1.8, 0xF08FC0, 0xF7C6E4, 0.85);
-  pkB.position.set(8.7, gh(8.7, 2.9), 2.9); S.add(pkB);
+  var pkA = gemCluster(1.5, 0xF06FB4, 0xF7B0D8, 0.90);
+  pkA.position.set(6.6, gh(6.6, 2.0), 2.0); S.add(pkA);
+  var pkB = gemCluster(1.1, 0xF08FC0, 0xF7C6E4, 0.85);
+  pkB.position.set(8.8, gh(8.8, 3.2), 3.2); S.add(pkB);
   /* 晶簇脚下粉色光晕（确定性：单面色片，呼应既有 gemCluster 用法） */
-  add(S, new THREE.PlaneGeometry(10, 10),
+  add(S, new THREE.PlaneGeometry(7, 7),
     basic(0xF06FB4, { transparent:true, opacity:0.26, additive:true, depthWrite:false }),
-    6.9, gh(6.9, 2.1) + 0.10, 2.1, { rot:[-Math.PI/2,0,0], cast:false, recv:false }).renderOrder = 1;
+    7.3, gh(7.3, 2.6) + 0.10, 2.6, { rot:[-Math.PI/2,0,0], cast:false, recv:false }).renderOrder = 1;
 
   /* S3 生命感：飘落花瓣 + 高空鸟群（走 dseq 独立随机流，零全局 rnd → 构图零漂移） */
   var petals = petalFall({ n: 70, color: 0xFFC2E4, w: 24, y0: 0.2, y1: 13, z0: 2, z1: 44,
