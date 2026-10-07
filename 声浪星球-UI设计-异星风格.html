@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>声浪星球 · UI 设计稿 v2（异星探险家风格）</title>
+<style>
+:root{
+  --page:#F2F6F9;
+  --card:#FFFFFF;
+  --line:#E4EBF0;
+  --ink:#26394B; --ink2:#5E7488; --dim:#93A6B5;
+  --grass:#7FD99A; --mint:#5FD3C0; --sand:#F3D9A4; --mustard:#F2C14E;
+  --coral:#FF8A5B; --berry:#F56B96; --lav:#A98BF0; --sky:#6EC6F0;
+  --r:18px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);padding:44px 30px 70px;
+  font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1220px;margin:0 auto}
+h1{font-size:26px;font-weight:600;margin:0 0 8px}
+.sub{color:var(--ink2);font-size:14px;margin:0 0 30px;line-height:1.7}
+.sub b{color:var(--ink)}
+.tokens{display:flex;flex-wrap:wrap;gap:18px;margin-bottom:32px;font-size:12px;color:var(--ink2)}
+.sw{display:flex;align-items:center;gap:7px}
+.dot{width:15px;height:15px;border-radius:5px}
+h2{font-size:17px;font-weight:600;margin:0 0 16px}
+.map{display:grid;grid-template-columns:repeat(auto-fit,minmax(226px,1fr));gap:14px;margin-bottom:42px}
+.map>div{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px}
+.map .k{display:inline-block;font-size:12px;font-weight:600;color:#fff;border-radius:7px;padding:3px 9px;margin-bottom:10px}
+.map b{display:block;font-size:13.5px;font-weight:600;margin-bottom:4px}
+.map span{font-size:12.5px;color:var(--ink2);line-height:1.6}
+.screens{display:grid;grid-template-columns:repeat(auto-fit,minmax(288px,1fr));gap:28px}
+.shot .cap{font-size:13px;color:var(--ink2);margin-top:12px;text-align:center}
+.shot .cap b{color:var(--ink);font-weight:600;display:block;margin-bottom:2px}
+.phone{width:100%;aspect-ratio:9/19;background:var(--card);border:1px solid var(--line);
+  border-radius:26px;overflow:hidden;position:relative;display:flex;flex-direction:column;
+  box-shadow:0 10px 30px rgba(38,57,75,.07)}
+.phone.center{justify-content:center;align-items:center;padding:26px;text-align:center}
+.sky{position:absolute;inset:0;background:linear-gradient(180deg,#CFEBFB 0%,#EAF6EE 55%,#FDF3DD 100%)}
+.layer{position:relative;display:flex;flex-direction:column;height:100%}
+.p-top{display:flex;align-items:center;gap:9px;padding:18px 20px 8px;font-size:13px;font-weight:600}
+.logo{width:20px;height:20px;border-radius:50%;background:conic-gradient(from 20deg,var(--grass),var(--sky),var(--lav),var(--mustard),var(--grass))}
+.p-body{padding:8px 20px;flex:1}
+.p-body h2{font-size:21px;line-height:1.35;font-weight:600;margin:10px 0 6px}
+.p-sub{color:var(--ink2);font-size:12.5px;margin:0 0 18px}
+.row{display:flex;align-items:center;gap:12px;background:rgba(255,255,255,.86);border:1px solid var(--line);
+  border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.planet{width:34px;height:34px;flex:0 0 34px;border-radius:50%}
+.row b{display:block;font-size:13px;font-weight:600}
+.row small{color:var(--dim);font-size:11.5px}
+.p-foot{padding:14px 20px 22px}
+.btn{width:100%;border:none;border-radius:14px;padding:14px;font-size:14px;font-weight:600;
+  background:#2E7D5B;color:#fff;font-family:inherit;cursor:pointer}
+.btn.ghost{background:rgba(255,255,255,.8);border:1px solid var(--line);color:var(--ink)}
+
+.gen h3{font-size:19px;font-weight:600;line-height:1.4;margin:16px 0 18px}
+.planet-big{width:132px;height:132px;margin:0 auto 6px}
+.bar{height:8px;border-radius:5px;background:rgba(38,57,75,.1);margin:18px 0 16px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--grass),var(--mustard),var(--coral))}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.chips span{font-size:11.5px;color:var(--ink2);background:rgba(255,255,255,.8);border:1px solid var(--line);border-radius:999px;padding:5px 11px}
+
+.phone.game{padding:0}
+.hud{display:flex;justify-content:space-between;gap:8px;padding:16px 16px 6px;position:relative;z-index:3}
+.hud-c{background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:12px;padding:7px 12px;min-width:76px}
+.hud-c.mid{flex:1;text-align:center}
+.hud-c small{display:block;font-size:10px;color:var(--dim);margin-bottom:2px}
+.hud-c b{font-size:14px;font-weight:600}
+.lane{flex:1;position:relative;z-index:2}
+.lane svg{width:100%;height:100%;display:block}
+.hud-b{padding:8px 18px 20px;position:relative;z-index:3}
+.energy{height:9px;border-radius:5px;background:rgba(38,57,75,.12);overflow:hidden;margin-bottom:12px}
+.energy i{display:block;height:100%;border-radius:5px;background:linear-gradient(90deg,var(--mint),var(--mustard),var(--coral))}
+.tips{display:flex;gap:9px;justify-content:center;flex-wrap:wrap}
+.tips span{font-size:11.5px;color:var(--ink2);background:rgba(255,255,255,.85);border:1px solid var(--line);border-radius:999px;padding:5px 12px}
+
+.result .rank{font-size:72px;font-weight:700;line-height:1;color:var(--mustard);
+  text-shadow:0 4px 0 rgba(38,57,75,.12)}
+.result .rank-sub{color:var(--ink2);font-size:12px;margin:10px 0 22px}
+.cells{display:flex;gap:9px;width:100%;margin-bottom:16px}
+.cells>div{flex:1;background:rgba(255,255,255,.88);border:1px solid var(--line);border-radius:13px;padding:11px 8px}
+.cells small{display:block;font-size:10.5px;color:var(--dim);margin-bottom:4px}
+.cells b{font-size:15px;font-weight:600}
+.planet-strip{display:flex;gap:8px;justify-content:center;margin-bottom:18px}
+.planet-strip i{width:22px;height:22px;border-radius:50%}
+.btns{display:flex;flex-direction:column;gap:9px;width:100%}
+.song .tag{font-size:11.5px;color:#2E7D5B;font-weight:600}
+.song h3{font-size:20px;font-weight:600;margin:9px 0 6px}
+.song p{font-size:12.5px;color:var(--ink2);margin:0 0 18px}
+.waveform{display:flex;align-items:center;justify-content:center;gap:3px;height:80px;width:100%;margin-bottom:20px}
+.waveform i{width:4px;border-radius:2px;background:var(--berry);opacity:.8}
+.play-row{display:flex;align-items:center;gap:14px;margin-bottom:20px;justify-content:center}
+.play{width:52px;height:52px;border-radius:50%;border:none;background:#2E7D5B;color:#fff;font-size:18px;cursor:pointer}
+.play-row span{font-size:12.5px;color:var(--ink2)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>声浪星球 · UI 设计稿 v2 —— 异星探险家（Astroneer）风格</h1>
+  <p class="sub">核心概念递进：<b>每一首歌，都是一颗等你降落的星球。</b>低多边形 + 无贴图 + 糖果色，全部由代码算法生成，不依赖任何美术素材。</p>
+
+  <div class="tokens">
+    <span class="sw"><span class="dot" style="background:#7FD99A"></span>草原绿</span>
+    <span class="sw"><span class="dot" style="background:#5FD3C0"></span>薄荷</span>
+    <span class="sw"><span class="dot" style="background:#F2C14E"></span>芥末黄</span>
+    <span class="sw"><span class="dot" style="background:#FF8A5B"></span>珊瑚橙</span>
+    <span class="sw"><span class="dot" style="background:#F56B96"></span>莓红</span>
+    <span class="sw"><span class="dot" style="background:#A98BF0"></span>薰衣草</span>
+    <span class="sw"><span class="dot" style="background:#6EC6F0"></span>天蓝</span>
+  </div>
+
+  <h2>音频特征 → 星球特征（这套映射就是「设计 + 技术」合一的独创点）</h2>
+  <div class="map">
+    <div><span class="k" style="background:#7FD99A">能量</span><b>决定地形起伏</b><span>副歌能量高 → 高耸的三角山脊；主歌平缓 → 辽阔平原</span></div>
+    <div><span class="k" style="background:#6EC6F0">音色明暗</span><b>决定星球主色</b><span>明亮电子音 → 薄荷蓝绿；低沉厚音 → 芥末橙紫</span></div>
+    <div><span class="k" style="background:#FF8A5B">节奏密度</span><b>决定机关密度</b><span>鼓点越密，跳跃台与滑轨排布越密</span></div>
+    <div><span class="k" style="background:#A98BF0">调式情绪</span><b>决定天空与天气</b><span>大调 → 晴朗暖光；小调 → 暮色紫空；Drop → 流星雨</span></div>
+  </div>
+
+  <h2>五个核心界面</h2>
+  <div class="screens">
+
+    <div class="shot">
+      <div class="phone">
+        <div class="sky"></div>
+        <div class="layer">
+          <div class="p-top"><span class="logo"></span>声浪星球</div>
+          <div class="p-body">
+            <h2>每一首歌<br>都是一颗星球</h2>
+            <p class="p-sub">选一首歌，降落一颗属于你的星球</p>
+            <div class="row"><span class="planet" style="background:linear-gradient(135deg,#7FD99A,#5FD3C0)"></span><div><b>导入本地音乐</b><small>生成一颗全新星球</small></div></div>
+            <div class="row"><span class="planet" style="background:linear-gradient(135deg,#F2C14E,#FF8A5B)"></span><div><b>我喜欢的音乐</b><small>128 首 · 已探索 12 颗星球</small></div></div>
+            <div class="row"><span class="planet" style="background:linear-gradient(135deg,#A98BF0,#6EC6F0)"></span><div><b>最近探索</b><small>《孤勇者》· 难度 6.2</small></div></div>
+          </div>
+          <div class="p-foot"><button class="btn">选择歌曲，生成星球</button></div>
+        </div>
+      </div>
+      <div class="cap"><b>1 · 选歌页</b>歌单 = 星图，选歌 = 降落</div>
+    </div>
+
+    <div class="shot">
+      <div class="phone center">
+        <div class="sky"></div>
+        <div class="gen" style="position:relative;z-index:2">
+          <svg class="planet-big" viewBox="0 0 132 132" aria-label="正在生成的星球">
+            <circle cx="66" cy="66" r="52" fill="#7FD99A"/>
+            <polygon points="20,86 52,58 78,96 44,110" fill="#5FD3C0"/>
+            <polygon points="70,34 104,52 96,88 66,74" fill="#F2C14E" opacity=".9"/>
+            <polygon points="34,44 56,36 52,60" fill="#A7E8C1"/>
+            <circle cx="66" cy="66" r="52" fill="none" stroke="#3FA57A" stroke-width="1.5" opacity=".45"/>
+            <circle cx="48" cy="48" r="7" fill="#fff" opacity=".55"/>
+          </svg>
+          <h3>正在把《孤勇者》<br>生成一颗星球</h3>
+          <div class="bar"><i style="width:64%"></i></div>
+          <div class="chips"><span>BPM 128</span><span>能量 高</span><span>主色 薄荷</span><span>机关 96</span></div>
+        </div>
+      </div>
+      <div class="cap"><b>2 · 生成星球</b>把 AI 打谱变成看得见的生命力</div>
+    </div>
+
+    <div class="shot">
+      <div class="phone game">
+        <div class="sky"></div>
+        <div class="hud">
+          <div class="hud-c"><small>连击</small><b>128</b></div>
+          <div class="hud-c mid"><small>《孤勇者》</small><b>1:20 / 3:42</b></div>
+          <div class="hud-c"><small>得分</small><b>24,800</b></div>
+        </div>
+        <div class="lane" data-terrain data-amp="86" data-n="11" data-planet="mint"></div>
+        <div class="hud-b">
+          <div class="energy"><i style="width:70%"></i></div>
+          <div class="tips"><span>点按 = 跳</span><span>下滑 = 滑行</span></div>
+        </div>
+      </div>
+      <div class="cap"><b>3 · 游戏中</b>低多边形三角山脊 = 声波地形</div>
+    </div>
+
+    <div class="shot">
+      <div class="phone center">
+        <div class="sky"></div>
+        <div class="result" style="width:100%;position:relative;z-index:2">
+          <div class="rank">S</div>
+          <div class="rank-sub">《孤勇者》· 薄荷星球 · 全新探索</div>
+          <div class="cells">
+            <div><small>最高连击</small><b>128</b></div>
+            <div><small>完美率</small><b>92%</b></div>
+            <div><small>跑动距离</small><b>1.2 km</b></div>
+          </div>
+          <div class="planet-strip">
+            <i style="background:linear-gradient(135deg,#7FD99A,#5FD3C0)"></i>
+            <i style="background:linear-gradient(135deg,#F2C14E,#FF8A5B)"></i>
+            <i style="background:linear-gradient(135deg,#A98BF0,#6EC6F0)"></i>
+            <i style="background:linear-gradient(135deg,#F56B96,#FF8A5B)"></i>
+          </div>
+          <div class="btns">
+            <button class="btn ghost">分享战绩卡</button>
+            <button class="btn">生成你玩出来的歌</button>
+          </div>
+        </div>
+      </div>
+      <div class="cap"><b>4 · 结算</b>星球图谱 = 你的探索收藏</div>
+    </div>
+
+    <div class="shot">
+      <div class="phone center">
+        <div class="sky"></div>
+        <div class="song" style="width:100%;position:relative;z-index:2">
+          <span class="tag">来自你刚才这一局</span>
+          <h3>你玩出来的歌</h3>
+          <p>48 秒 · 由你的操作实时生成</p>
+          <div class="waveform" data-bars="30"></div>
+          <div class="play-row">
+            <button class="play">▶</button><span>00:42 / 00:42</span>
+          </div>
+          <div class="btns">
+            <button class="btn ghost">下载 / 分享</button>
+            <button class="btn">再玩一次</button>
+          </div>
+        </div>
+      </div>
+      <div class="cap"><b>5 · 你玩出来的歌</b>玩法闭环的爆点</div>
+    </div>
+
+  </div>
+</div>
+<script>
+function shade(hex,amt){
+  var c=hex.replace('#','');
+  var r=parseInt(c.substr(0,2),16),g=parseInt(c.substr(2,2),16),b=parseInt(c.substr(4,2),16);
+  r=Math.max(0,Math.min(255,r+amt));g=Math.max(0,Math.min(255,g+amt));b=Math.max(0,Math.min(255,b+amt));
+  return '#'+[r,g,b].map(function(v){return v.toString(16).padStart(2,'0')}).join('');
+}
+var PALETTES={
+  mint:['#7FD99A','#5FD3C0','#A7E8C1','#6EC6F0','#8FE0CF'],
+  sunset:['#F2C14E','#FF8A5B','#F3D9A4','#F56B96','#FFB37A']
+};
+document.querySelectorAll('[data-terrain]').forEach(function(el){
+  var W=300,H=300,base=212,n=+el.dataset.n||11,amp=+el.dataset.amp||80;
+  var cols=PALETTES[el.dataset.planet]||PALETTES.mint;
+  var pts=[];
+  for(var i=0;i<=n;i++){
+    pts.push({x:(i*W/n).toFixed(1),y:(base-amp*(0.32+0.68*Math.abs(Math.sin(i*1.22+1)))).toFixed(1)});
+  }
+  function yAt(x){
+    for(var i=0;i<n;i++){
+      var a=+pts[i].x,b=+pts[i+1].x;
+      if(x>=a&&x<=b){var t=(x-a)/(b-a);return +pts[i].y+(+pts[i+1].y-+pts[i].y)*t;}
+    }
+    return base-40;
+  }
+  var s='<svg viewBox="0 0 300 300" preserveAspectRatio="none">';
+  s+='<rect x="0" y="212" width="300" height="88" fill="'+shade(cols[0],-30)+'"/>';
+  for(var i=0;i<n;i++){
+    var a=pts[i],b=pts[i+1];
+    var col=cols[i%cols.length];
+    s+='<polygon points="'+a.x+',212 '+a.x+','+a.y+' '+b.x+','+b.y+'" fill="'+shade(col,-14)+'"/>';
+    s+='<polygon points="'+a.x+',212 '+b.x+','+b.y+' '+b.x+',212" fill="'+col+'"/>';
+  }
+  var px=76,py=yAt(px);
+  var jx=152,jy=yAt(jx);
+  var bx=214,by=yAt(bx);
+  s+='<polygon points="'+(jx-13)+','+jy+' '+(jx+13)+','+jy+' '+jx+','+(jy-24)+'" fill="#FFFFFF" opacity=".92"/>';
+  s+='<polyline points="'+(bx-12)+','+(by-6)+' '+bx+','+(by-17)+' '+(bx+12)+','+(by-6)+'" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>';
+  s+='<polyline points="'+(bx+4)+','+(by-6)+' '+(bx+16)+','+(by-17)+' '+(bx+28)+','+(by-6)+'" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>';
+  s+='<circle cx="'+(bx+76)+'" cy="'+(yAt(bx+76)-14)+'" r="7" fill="#FFFFFF" opacity=".85"/>';
+  s+='<circle cx="188" cy="128" r="6" fill="#FFFFFF" opacity=".75"/>';
+  s+='<circle cx="222" cy="104" r="5" fill="#FFFFFF" opacity=".6"/>';
+  s+='<line x1="'+px+'" y1="26" x2="'+px+'" y2="300" stroke="#FFFFFF" stroke-width="1" stroke-dasharray="3 5" opacity=".55"/>';
+  s+='<circle cx="'+px+'" cy="'+(py-13)+'" r="12" fill="#F56B96"/>';
+  s+='<circle cx="'+(px-4)+'" cy="'+(py-17)+'" r="3.5" fill="#fff"/>';
+  s+='</svg>';
+  el.innerHTML=s;
+});
+document.querySelectorAll('[data-bars]').forEach(function(el){
+  var n=+el.dataset.bars;
+  for(var i=0;i<n;i++){
+    var b=document.createElement('i');
+    b.style.height=Math.round(16+Math.abs(Math.sin(i*1.35))*62)+'px';
+    b.style.opacity=(0.45+Math.abs(Math.cos(i*0.7))*0.5).toFixed(2);
+    el.appendChild(b);
+  }
+});
+</script>
+</body>
+</html>
