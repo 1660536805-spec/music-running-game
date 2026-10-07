@@ -142,6 +142,31 @@
   #cwhud .orb{position:absolute;right:calc(40*var(--px));top:calc(168*var(--px));
     font-size:calc(26*var(--px));font-weight:700;color:rgba(255,255,255,.78);
     text-shadow:0 calc(3*var(--px)) calc(14*var(--px)) rgba(0,0,0,.5)}
+  /* P4 · 预判窗口提示（段落交界前 2 拍出现；走向符号 ↑ 上行 / ↓ 下行 / ~ 持续） */
+  #cwhud .ant{position:absolute;left:50%;top:calc(210*var(--px));transform:translateX(-50%) scale(.94);
+    display:none;align-items:center;gap:calc(14*var(--px));
+    padding:calc(9*var(--px)) calc(26*var(--px));border-radius:calc(999*var(--px));
+    background:rgba(10,4,24,.55);border:calc(2*var(--px)) solid rgba(255,255,255,.30);
+    font-size:calc(24*var(--px));font-weight:800;letter-spacing:.10em;color:#fff;
+    text-shadow:0 calc(3*var(--px)) calc(14*var(--px)) rgba(0,0,0,.5);transition:border-color .12s,box-shadow .12s}
+  #cwhud .ant.on{display:flex}
+  #cwhud .ant b{font-size:calc(42*var(--px));line-height:1}
+  #cwhud .ant em{font-style:normal;color:rgba(255,255,255,.62);font-size:calc(21*var(--px));letter-spacing:.06em}
+  #cwhud .ant.ok{border-color:rgba(140,255,200,.95);box-shadow:0 0 calc(26*var(--px)) rgba(140,255,200,.55)}
+  #cwhud .ant i{display:block;height:calc(5*var(--px));width:calc(120*var(--px));border-radius:calc(999*var(--px));
+    background:rgba(255,255,255,.18);overflow:hidden}
+  #cwhud .ant i s{display:block;height:100%;width:0;background:linear-gradient(90deg,#18E0FF,#8CFFC8)}
+  /* P4 · 实时倍率（同调 mult × 预判 amo）；仅 >1.0 时显示，不占常规画面 */
+  #cwhud .mz{position:absolute;right:calc(40*var(--px));top:calc(206*var(--px));
+    display:none;font-size:calc(25*var(--px));font-weight:800;letter-spacing:.03em;
+    color:#8CFFC8;text-shadow:0 calc(3*var(--px)) calc(16*var(--px)) rgba(0,0,0,.55)}
+  #cwhud .mz.on{display:block}
+  #cwhud .mz b{color:#FFE27A;font-weight:800}
+  /* P4 · 当前镜头名（仅调试 / 固定追尾辅助时显示，不污染常规截图） */
+  #cwhud .lens{position:absolute;left:50%;bottom:calc(34*var(--px));transform:translateX(-50%);
+    display:none;font-size:calc(21*var(--px));font-weight:700;letter-spacing:.22em;
+    color:rgba(255,255,255,.60);text-shadow:0 calc(3*var(--px)) calc(14*var(--px)) rgba(0,0,0,.5)}
+  #cwhud .lens.on{display:block}
   .side{right:calc(66*var(--px));top:50%;transform:translateY(-50%);
     display:flex;flex-direction:column;gap:calc(22*var(--px))}
   .side b{width:calc(96*var(--px));height:calc(96*var(--px));border-radius:calc(26*var(--px));
@@ -244,6 +269,8 @@ function pick(a){ return a[Math.floor(rnd()*a.length)]; }
    因此可以在已调好的场景里任意插入随机外观的元素而不打乱既有构图 */
 function dseq(seed){ var s = (seed >>> 0) || 1; return function(){ s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; }; }
 function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+/* M3-CW · P4：运镜缓动（比操作慢 —— 镜头是"运镜"而非"操作"，见设计 §5.2） */
+function easeInOutSine(t){ return -(Math.cos(Math.PI * t) - 1) / 2; }
 function sstep(t){ t = clamp(t,0,1); return t*t*(3-2*t); }
 function D2R(d){ return d*Math.PI/180; }
 
@@ -2839,7 +2866,10 @@ function loop(now){
         PlayerController.update(dt, cur, SCN[cur]);
         Collectible.update(dt, cur, SCN[cur]);
         Portal.update(dt, cur, SCN[cur]);
-        CameraRig.update(dt, cur);                 /* M2：方案 B 微跟随（仅可玩关） */
+        if (Track.isCw(cur)) Lens.update(dt, cur);  /* M3-CW：causeway 由 Lens 接管（5 镜头状态机） */
+        else CameraRig.update(dt, cur);             /* M2：方案 B 微跟随（仅可玩关） */
+        CWAnt.update(dt);                          /* M3-CW·P4：预判窗口（段落交界前 2 拍押注 → amo） */
+        CWReso.update(dt);                         /* M3-CW·P4：同调长按（呼吸长度判定 → mult） */
         VFX.update(dt, cur);
         RhythmHUD.update(dt);                      /* M3-CW：音游浮层（仅 causeway 显示时写 DOM） */
       }
@@ -3412,6 +3442,135 @@ var CWScore = {
 };
 
 /* ==========================================================================
+   M3-CW · P4 音乐理解机制（CWAnt 预判窗口 + CWReso 同调长按）
+   --------------------------------------------------------------------------
+   对齐 docs/声浪星球-关卡设计-超频长阶.md §6 / §7.4：
+     · CWAnt  §6.1：段落交界**前 2 拍**开窗，HUD 出走向符号（谱面 melody.slope 预判的 ↑/↓/~）；
+       窗口内「长按同调」即完成**押注** ⇒ 交界结算，下一段倍率 amo = ×1.5（押对）/ ×1.0（押错·不押）。
+       **只奖励理解、不惩罚失手** —— 押错与不押等价，绝不扣分、不断连击。
+     · CWReso §6.2：旋律**持续音**（chart.sustains）按住「同调」，于长音结束拍点 ±80 / ±160 ms 松手
+       ⇒ Perfect / Good；未按或错拍 ⇒ Miss（同样只影响乘区，不扣分）。
+   两个乘区均并入 CWScore.hit 的结算式：分 = base × 连击倍率 × mult × amo（§7.4）。
+   ▸ 随机流纪律：本模块零 rnd()（仅读谱面真值 + 累加）⇒ 不扰动既有关卡随机序列。
+   ▸ FREEZE 下不调用（主循环 !FREEZE 块）⇒ 定帧基线不受影响。
+   ========================================================================== */
+var CWAnt = {
+  list: null, idx: 0, open: false, bet: false, ok: null, cur: null, _shown: false, _sym: '',
+  reset: function(t){
+    if (RhythmHUD._q && RhythmHUD._q.ant && CWAnt._shown) RhythmHUD._q.ant.className = 'ant';
+    CWAnt.list = null; CWAnt.idx = 0; CWAnt.open = false; CWAnt.bet = false;
+    CWAnt.ok = null; CWAnt.cur = null; CWAnt._shown = false; CWAnt._sym = '';
+    CWScore.amo = 1;
+    if (t != null) CWAnt._seek(t);
+  },
+  _list: function(){
+    if (!CWAnt.list && Chart.data) CWAnt.list = Chart.data.anticipations || [];
+    return CWAnt.list || [];
+  },
+  /* seek：把游标推进到"下一个尚未结算的窗口"（用于门禁 / 时间跳转） */
+  _seek: function(t){
+    var L = CWAnt._list(); CWAnt.idx = 0;
+    for (var i = 0; i < L.length; i++){ if (L[i].at + L[i].win <= t) CWAnt.idx = i + 1; }
+  },
+  dirSym: function(d){ return d === 'up' ? '↑' : (d === 'down' ? '↓' : '~'); },
+  update: function(dt){
+    var L = CWAnt._list(); if (!L.length) return;
+    var t = Track.songT;
+    /* ① 结算：已越过交界线的窗口 ⇒ 定 amo（押对 ×1.5 / 其余 ×1.0） */
+    if (CWAnt.open && CWAnt.cur && t >= CWAnt.cur.at + CWAnt.cur.win){
+      CWAnt.ok = CWAnt.bet;
+      CWScore.amo = CWAnt.ok ? 1.5 : 1.0;
+      if (CWAnt.ok) m1Sfx('cwGood');
+      Bus.emit('cw:ant', { dir: CWAnt.cur.dir, ok: CWAnt.ok });
+      CWAnt.idx++; CWAnt.open = false; CWAnt.cur = null; CWAnt.bet = false;
+    }
+    /* ② 开窗：段落交界前 2 拍 */
+    var a = L[CWAnt.idx];
+    if (!CWAnt.open && a && t >= a.at && t < a.at + a.win){
+      CWAnt.open = true; CWAnt.bet = false; CWAnt.cur = a;
+    }
+    /* ③ 押注：窗口内出现「同调长按」即 latch（§6.1 玩家操作 = 长按同调完成押注） */
+    if (CWAnt.open && !CWAnt.bet && CWInput.resonating) CWAnt.bet = true;
+    /* ④ HUD（走向符号 + 窗口进度条 + 押注已生效高亮） */
+    var q = RhythmHUD._q; if (!q || !q.ant) return;
+    if (CWAnt.open && CWAnt.cur){
+      if (!CWAnt._shown){ q.ant.className = 'ant on'; CWAnt._shown = true; }
+      var sym = CWAnt.dirSym(CWAnt.cur.dir);
+      if (CWAnt._sym !== sym){ q.antSym.textContent = sym; CWAnt._sym = sym; }
+      q.antBar.style.width = (clamp((t - CWAnt.cur.at) / CWAnt.cur.win, 0, 1) * 100).toFixed(0) + '%';
+      if (CWAnt.bet) q.ant.classList.add('ok'); else q.ant.classList.remove('ok');
+    } else if (CWAnt._shown){
+      q.ant.className = 'ant'; CWAnt._shown = false; CWAnt._sym = '';
+    }
+  },
+  info: function(){ return { open: CWAnt.open, bet: CWAnt.bet, ok: CWAnt.ok,
+    dir: CWAnt.cur ? CWAnt.cur.dir : null, idx: CWAnt.idx, amo: CWScore.amo }; }
+};
+
+var CWReso = {
+  list: null, done: null, total: 0, perfect: 0, good: 0, miss: 0, _auto: null,
+  reset: function(t){
+    CWReso.list = null; CWReso.done = null; CWReso.total = 0;
+    CWReso.perfect = CWReso.good = CWReso.miss = 0; CWReso._auto = null;
+    CWScore.mult = 1;
+    if (t != null) CWReso._seek(t);
+  },
+  _list: function(){
+    if (!CWReso.list && Chart.data) CWReso.list = Chart.data.sustains || [];
+    return CWReso.list || [];
+  },
+  /* seek：t 之前已过窗的长音标记 'skip'（跳过的时点不是玩家的责任 ⇒ 不计入分母） */
+  _seek: function(t){
+    var L = CWReso._list();
+    CWReso.done = L.map(function(s){ return (s.t1 + Judge.G < t) ? 'skip' : null; });
+    CWReso._recount();
+  },
+  /* 松手：落点 ±Good 窗内的未决长音一并判定（数据里 4 对长音仅差 38 ms ⇒ 共享同一次"呼吸"） */
+  release: function(tr){
+    var L = CWReso._list(); if (!L.length) return false;
+    if (!CWReso.done || CWReso.done.length !== L.length)
+      CWReso.done = L.map(function(s){ return (s.t1 + Judge.G < Track.songT) ? 'skip' : null; });
+    var hit = false;
+    for (var i = 0; i < L.length; i++){
+      if (CWReso.done[i] !== null) continue;
+      var d = tr - L[i].t1, a = Math.abs(d);
+      if (a <= Judge.P){ CWReso.done[i] = 'perfect'; hit = true; }
+      else if (a <= Judge.G){ CWReso.done[i] = 'good'; hit = true; }
+    }
+    if (hit){ CWReso._recount(); m1Sfx('cwGood'); }
+    return hit;
+  },
+  update: function(dt){
+    var L = CWReso._list(); if (!L.length) return;
+    if (!CWReso.done || CWReso.done.length !== L.length)
+      CWReso.done = L.map(function(){ return null; });
+    var t = Track.songT;
+    /* 自动松手（门禁 / 调试）：到点走与真人一致的 CWInput.end 通道 */
+    if (CWReso._auto != null && t >= CWReso._auto){ CWReso._auto = null; CWInput.end(); return; }
+    /* 越过 Good 窗仍未松手 ⇒ Miss（只是"没有加成"，不扣分、不断连击） */
+    var changed = false;
+    for (var i = 0; i < L.length; i++){
+      if (CWReso.done[i] === null && t > L[i].t1 + Judge.G){ CWReso.done[i] = 'miss'; changed = true; }
+    }
+    if (changed) CWReso._recount();
+  },
+  _recount: function(){
+    var d = CWReso.done || [], p = 0, g = 0, m = 0, n = 0;
+    for (var i = 0; i < d.length; i++){
+      if (d[i] === 'skip') continue;
+      n++;
+      if (d[i] === 'perfect') p++; else if (d[i] === 'good') g++; else if (d[i] === 'miss') m++;
+    }
+    CWReso.perfect = p; CWReso.good = g; CWReso.miss = m; CWReso.total = n;
+    CWScore.mult = 1 + 0.5 * (n ? p / n : 0);          /* §7.4：同调倍率 = 1.0 + 0.5 × (Perfect / 总数) */
+  },
+  autoRelease: function(t){ CWReso._auto = t; },
+  info: function(){ return { perfect: CWReso.perfect, good: CWReso.good, miss: CWReso.miss,
+    total: CWReso.total, mult: +CWScore.mult.toFixed(3), held: CWInput.resonating }; }
+};
+Bus.on('cw:resonate', function(e){ if (e && e.on === false && Track.isCw(cur)) CWReso.release(Track.songT); });
+
+/* ==========================================================================
    M3-CW · 障碍系统（Obstacle）—— 谱面 → 世界物体 → 掠过判定
    --------------------------------------------------------------------------
    障碍按谱面 z 静态落位（z = CW.Z_START − distAt(t) = Track.zOf(t)），角色沿 −z 迎面逼近。
@@ -3613,13 +3772,18 @@ var RhythmHUD = {
       '<div class="orb">◈ 0 / 0</div>' +
       '<div class="cmb"><b>0</b><s>COMBO</s></div>' +
       '<div class="ly"><b class="lo">LO · 贴地</b><b class="hi">HI · 悬浮</b></div>' +
+      '<div class="ant"><b>↑</b><em>预判</em><i><s></s></i></div>' +
+      '<div class="mz"></div>' +
+      '<div class="lens"></div>' +
       '<div class="jd"></div>';
     document.body.appendChild(d);
     RhythmHUD.el = d;
     RhythmHUD._q = {
       bar: d.querySelector('.bar i'), sc: d.querySelector('.sc b'), acc: d.querySelector('.sc s'),
       orb: d.querySelector('.orb'), cmb: d.querySelector('.cmb b'), jd: d.querySelector('.jd'),
-      lo: d.querySelector('.ly .lo'), hi: d.querySelector('.ly .hi')
+      lo: d.querySelector('.ly .lo'), hi: d.querySelector('.ly .hi'),
+      ant: d.querySelector('.ant'), antSym: d.querySelector('.ant b'),
+      antBar: d.querySelector('.ant i s'), lens: d.querySelector('.lens'), mz: d.querySelector('.mz')
     };
     RhythmHUD._orbTotal = Chart.data ? Chart.data.obstacles.filter(function(o){ return o.type === 'orb'; }).length : 0;
     return d;
@@ -3654,6 +3818,15 @@ var RhythmHUD = {
     var eff = Track.effLayer();
     q.lo.classList.toggle('on', eff === 'lo');
     q.hi.classList.toggle('on', eff === 'hi');
+    /* M3-CW·P4：实时倍率（同调 mult × 预判 amo）；仅 >1.0 时占位，避免常规画面被字块干扰 */
+    if (q.mz){
+      var total = CWScore.mult * CWScore.amo;
+      if (total > 1.001){
+        if (q.mz.className !== 'mz on') q.mz.className = 'mz on';
+        var txt = '×' + total.toFixed(2);
+        if (q.mz.textContent !== txt) q.mz.textContent = txt;
+      } else if (q.mz.className !== 'mz') q.mz.className = 'mz';
+    }
   }
 };
 
@@ -3901,6 +4074,118 @@ var CameraRig = {
   }
 };
 
+/* ==========================================================================
+   M3-CW · P4 段落镜头系统（Lens + LensArbiter）
+   --------------------------------------------------------------------------
+   5 个镜头状态：追尾 chase / 贴身 onboard / 俯视 overhead / 侧视 lateral / 漂移 drift。
+   ▸ **只写 SCN.causeway.camera**（position / lookAt / fov）—— 不新增任何 three 对象、
+     绝不触碰 hero ⇒ draw calls / tris / heroC 零变化（定帧门禁不受影响）。
+   ▸ causeway 下由 Lens 接管相机（主循环分支），CameraRig **源码零改动**、四场景逐位不变。
+   ▸ 切换边界 = 乐句（4 小节），由 Chart.lensCues 驱动（生成期已保证：全部落在 4 小节线、
+     间隔 ≥4 小节、每乐句 ≤1 次）⇒ LensArbiter = 游标消费 + 结构校验 + 固定追尾守卫。
+   ▸ 切换时长 180ms / easeInOutSine（比操作慢 —— 镜头是"运镜"）；roll 恒 0（防晕 §5.4）。
+   ========================================================================== */
+var LENSG = {
+  chase:    { off: [0,    1.55, 4.90], look: [0, 1.20, -0.50], fov: 70 },  /* 与 CAM.causeway 定帧等价 */
+  onboard:  { off: [0,    1.62, 1.75], look: [0, 1.28, -7.00], fov: 92 },
+  overhead: { off: [0,    6.00, 2.60], look: [0, 0.60, -7.00], fov: 78 },
+  lateral:  { off: [4.50, 1.70, 2.60], look: [0, 1.10, -4.00], fov: 70 },
+  drift:    { off: [4.20, 2.30, 4.20], look: [0, 1.10, -3.00], fov: 72 }
+};
+var Lens = {
+  cur: 'chase', t: 1, DUR: 0.180, fromGeo: null, fromFov: 70, fov: 70,
+  ay: null, driftPh: 0, cueIdx: 0, lastBar: -99, lastPhrase: -1, _lensOn: false,
+  fixed: (Q.get('fixchase') === '1'),
+  reset: function(){
+    Lens.cur = 'chase'; Lens.t = 1; Lens.cueIdx = 0; Lens.lastBar = -99; Lens.lastPhrase = -1;
+    Lens.fromGeo = null; Lens.fov = LENSG.chase.fov; Lens.ay = null; Lens.driftPh = 0;
+    if (FREEZE) return;                                   /* 定帧绝不写相机 */
+    var S = SCN.causeway; if (!S || !S.camera || !S.hero) return;
+    S.camera.fov = CAM.causeway.fov; S.camera.updateProjectionMatrix();
+    var h = S.hero, G = LENSG.chase;
+    S.camera.position.set(h.position.x + G.off[0], h.position.y + G.off[1], h.position.z + G.off[2]);
+    S.camera.lookAt(h.position.x + G.look[0], h.position.y + G.look[1], h.position.z + G.look[2]);
+  },
+  toLens: function(name, bar){
+    if (!LENSG[name] || name === Lens.cur){ Lens.cueIdx++; return false; }
+    Lens.fromGeo = LENSG[Lens.cur]; Lens.fromFov = Lens.fov;
+    Lens.cur = name; Lens.t = 0; Lens.cueIdx++;
+    if (bar != null) Lens.lastBar = bar;
+    Lens.lastPhrase = Math.floor(Lens.lastBar / 4);
+    Bus.emit('cw:lens', { name: name });
+    return true;
+  },
+  update: function(dt, k){
+    if (FREEZE || !Track.isCw(k)) return;                 /* 双保险（调用点已在 !FREEZE 内） */
+    var S = SCN.causeway; if (!S || !S.camera || !S.hero) return;
+    var h = S.hero, cam = S.camera;
+    LensArbiter.update(dt);
+    if (Lens.t < 1) Lens.t = Math.min(1, Lens.t + dt / Lens.DUR);
+    var e = (Lens.t >= 1) ? 1 : easeInOutSine(Lens.t);
+    if (Lens.cur === 'drift') Lens.driftPh += dt * 0.35;
+    var G = LENSG[Lens.cur], off = G.off, look = G.look;
+    if (Lens.cur === 'drift'){                            /* 漂移：绕轴缓慢环绕（dt 积分 ⇒ 零随机） */
+      var c = Math.cos(Lens.driftPh), s = Math.sin(Lens.driftPh);
+      off = [LENSG.drift.off[0] * c, LENSG.drift.off[1], LENSG.drift.off[0] * s];
+    }
+    var FG = Lens.fromGeo || G, FF = Lens.fromGeo ? Lens.fromFov : G.fov;
+    var fo = FG.off, fl = FG.look;
+    var px = fo[0] + (off[0] - fo[0]) * e, py = fo[1] + (off[1] - fo[1]) * e, pz = fo[2] + (off[2] - fo[2]) * e;
+    var lx = fl[0] + (look[0] - fl[0]) * e, ly = fl[1] + (look[1] - fl[1]) * e, lz = fl[2] + (look[2] - fl[2]) * e;
+    /* FOV 随速度/能量向 92 插值（速度感的主要来源，设计 §3.3） */
+    var spr = clamp((Track.speed() - CW.BASE) / (CW.SPRINT - CW.BASE), 0, 1);
+    var en = clamp(Track.energy, 0, 1);
+    var drive = clamp(0.7 * spr + 0.3 * Math.max(0, en - CW.SPRINT_AT) / (1 - CW.SPRINT_AT), 0, 1);
+    var fovT = G.fov + (92 - G.fov) * drive;
+    Lens.fov = FF + (fovT - FF) * e;
+    /* 相机 y 走短时常数阻尼（吃掉 0.9m 层切换的顿挫）；x/z 刚性跟随 ⇒ "世界向后流过" */
+    if (Lens.ay == null) Lens.ay = h.position.y;
+    Lens.ay += (h.position.y - Lens.ay) * Math.min(1, dt * 8);
+    cam.position.set(h.position.x + px, Lens.ay + py, h.position.z + pz);
+    cam.lookAt(h.position.x + lx, Lens.ay + ly, h.position.z + lz);
+    if (Math.abs(cam.fov - Lens.fov) > 0.05){ cam.fov = Lens.fov; cam.updateProjectionMatrix(); }
+    /* 镜头名指示：仅调试 / 固定追尾辅助下显示 */
+    var q = RhythmHUD._q;
+    if (q && q.lens){
+      var show = (Lens.fixed || DBG);
+      if (show){
+        if (!Lens._lensOn){ q.lens.className = 'lens on'; Lens._lensOn = true; }
+        var nm = Lens.fixed ? '固定追尾' : Lens.cur.toUpperCase();
+        if (q.lens.textContent !== nm) q.lens.textContent = nm;
+      } else if (Lens._lensOn){ q.lens.className = 'lens'; Lens._lensOn = false; }
+    }
+  },
+  info: function(){ return { lens: Lens.cur, t: +Lens.t.toFixed(3), fov: +Lens.fov.toFixed(1),
+                             fixed: Lens.fixed, cue: Lens.cueIdx }; },
+  /* 调试 / seek：按时刻直接落位（不做插值），并保证 cue 游标不错位 */
+  snapForTime: function(t){
+    var cues = Chart.data ? Chart.data.lensCues : null; if (!cues) return;
+    var target = 'chase', bar = 0, idx = 0;
+    for (var i = 0; i < cues.length; i++){ if (t >= cues[i].t){ target = cues[i].lens; bar = cues[i].bar; idx = i + 1; } }
+    if (Lens.fixed){ target = 'chase'; bar = 0; }        /* §5.4：固定追尾下 seek 同样不越权 */
+    Lens.cur = target; Lens.t = 1; Lens.cueIdx = idx; Lens.lastBar = bar; Lens.lastPhrase = Math.floor(bar / 4);
+    Lens.fromGeo = null; Lens.fov = LENSG[target].fov; Lens.driftPh = 0; Lens.ay = null;
+    if (!FREEZE && SCN.causeway && SCN.causeway.camera){
+      SCN.causeway.camera.fov = Lens.fov; SCN.causeway.camera.updateProjectionMatrix();
+    }
+  }
+};
+var LensArbiter = {
+  update: function(dt){
+    if (Lens.fixed) return;                               /* §5.4 固定追尾：不吃 cue */
+    var cues = Chart.data ? Chart.data.lensCues : null; if (!cues) return;
+    if (Lens.t < 1) return;                               /* 上次运镜未结束 ⇒ 段内稳定、不抖动 */
+    var c = cues[Lens.cueIdx]; if (!c) return;
+    if (Track.songT < c.t) return;
+    var bar = c.bar, phrase = Math.floor(bar / 4);
+    var onPhrase = Math.abs(bar / 4 - phrase) < 1e-6;     /* 必须在 4 小节线 */
+    var coolOK = (bar - Lens.lastBar) >= 2;               /* 冷却 ≥2 小节 */
+    var onceOK = (phrase !== Lens.lastPhrase);            /* 同一乐句 ≤1 次 */
+    if (!onPhrase || !coolOK || !onceOK){ Lens.toLens('chase', bar); return; }  /* 违规 → 静默降级 */
+    Lens.toLens(c.lens, bar);
+  }
+};
+
 /* ---- HUD 接线（GDD §5.3 / §7.5-8）：只在数据变化时重渲染 ---- */
 var HUD = {
   dirty: false, _flash: null,
@@ -3938,6 +4223,9 @@ var M1 = {
     if (k === 'causeway'){
       Chart.load(); BGM.start();     /* M3-CW：加载真值谱面 + 起播 BGM（待首个用户手势） */
       CWScore.reset();
+      Lens.reset();                  /* M3-CW·P4：相机复位（fov 归 70 + 贴回 chase ⇒ 修往返后 fov 残留） */
+      CWAnt.reset();                 /* M3-CW·P4：清预判窗口 / 押注 / amo */
+      CWReso.reset();                /* M3-CW·P4：清同调长音判定 / mult */
       Obstacle.mount(); Obstacle.reset();   /* FREEZE 下 mount 内部自会跳过 ⇒ 定帧 children 不变 */
       RhythmHUD.show(true);
     } else {
@@ -4026,9 +4314,18 @@ window.__cwSeek = function(t){
   if (BGM.playing && actx) bgmT0 = actx.currentTime - t;
   CWScore.reset();
   Obstacle.mount(); Obstacle.seek(t);
+  Lens.snapForTime(t);                         /* M3-CW·P4：镜头按时刻直接落位 */
+  CWAnt.reset(t);                              /* M3-CW·P4：预判游标随时刻前移 */
+  CWReso.reset(t);                             /* M3-CW·P4：同调游标随时刻前移（早于 t 的长音不计） */
   RhythmHUD.ensure();
   return true;
 };
+/* M3-CW·P4 调试 / 门禁钩子：镜头状态机 + 同调自动松手 */
+window.__cwChart = function(){ return Chart.data; };
+window.__cwLensInfo = function(){ return Lens.info(); };
+window.__cwLens = function(name){ return Lens.toLens(name, null); };
+window.__cwLensFixed = function(on){ Lens.fixed = !!on; if (on) Lens.cur = Lens.cur || 'chase'; return Lens.fixed; };
+window.__cwAutoRelease = function(t){ CWReso.autoRelease(t); };
 window.__SCN = SCN; /* 调试钩子：控制台可访问各场景对象 */
 window.__info = function(){
   var out = {};
@@ -4070,7 +4367,11 @@ window.__info = function(){
              score: { value: CWScore.score, combo: CWScore.combo, maxCombo: CWScore.maxCombo,
                       perfect: CWScore.perfect, good: CWScore.good, miss: CWScore.miss,
                       orbs: CWScore.orbs, orbMiss: CWScore.orbMiss, decoy: CWScore.decoy,
-                      acc: +CWScore.accuracy().toFixed(3), rank: CWScore.rank() } };
+                      mult: +CWScore.mult.toFixed(3), amo: CWScore.amo,
+                      acc: +CWScore.accuracy().toFixed(3), rank: CWScore.rank() },
+             lens: Lens.info(),
+             ant: CWAnt.info(),
+             reso: CWReso.info() };
   return out;
 };
 boot();

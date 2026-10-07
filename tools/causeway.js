@@ -9,7 +9,10 @@
      ④ 单赛道运行时：真值谱面已加载 / BGM 已起播 / 段落已解析 / 长按空格进入同调 / 松手退出
      ⑤ 判定链路（P3）：不操作→Miss / 压线切→Perfect·Good / 脉冲球同层收集·异层不扣分 /
         误导体掠过不扣分 / 双闸门不操作→通过
-     ⑥ 零控制台报错
+     ⑥ 段落镜头（P4）：lensCues 全落 4 小节线·乐句唯一 / 越过 cue 后镜头按谱面切换
+     ⑦ 预判押注（P4）：段界前 2 拍开窗·走向符号符谱 / 窗口内长按→押对 amo=1.5 / 不押→amo=1.0
+     ⑧ 同调长按（P4）：长音结束拍点松手→Perfect，同调倍率 mult ∈ (1, 1.5]
+     ⑨ 零控制台报错
    用法: node tools/causeway.js [--record]
    ============================================================================ */
 'use strict';
@@ -147,6 +150,72 @@ const URL = 'http://127.0.0.1:8777/%E5%A3%B0%E6%B5%AA%E6%98%9F%E7%90%83.html';
   const jsT = (await cwInfo()).score;
   console.log('⑩ 双闸门不操作:', JSON.stringify(jsT));
   if (!(jsT.perfect >= 1) || jsT.miss !== 0) fails.push('⑩ 双闸门不操作未正确通过: ' + JSON.stringify(jsT));
+
+  /* ---- ⑪ 段落镜头（P4）：cue 结构 + 运行时切换 ---- */
+  console.log('=== causeway · 段落镜头 ===');
+  const cues = await page.evaluate(() => (window.__cwChart() || {}).lensCues || []);
+  console.log('lensCues = ' + JSON.stringify(cues.map(c => [c.bar, c.lens])));
+  const onGrid = cues.length === 7 && cues.every(c => c.bar % 4 === 0);
+  const phraseUniq = new Set(cues.map(c => Math.floor(c.bar / 4))).size === cues.length;
+  if (!onGrid) fails.push('⑪ lensCues 未全落 4 小节线: ' + JSON.stringify(cues.map(c => c.bar)));
+  if (!phraseUniq) fails.push('⑪ lensCues 同一乐句出现多次');
+  if (cues.length > 1){
+    await seek(cues[1].t - 0.4);                       /* 落在 cue[1] 之前（应仍停在上一镜头） */
+    const lb = (await cwInfo()).lens;
+    await page.waitForTimeout(900);                    /* 越过 cue[1] 的切换点 */
+    const la = (await cwInfo()).lens;
+    console.log('镜头 before=' + JSON.stringify(lb) + '  after=' + JSON.stringify(la));
+    if (cues.length && lb.lens !== cues[0].lens) fails.push('⑪ cue 之前镜头非上一 cue: ' + lb.lens);
+    if (la.lens !== cues[1].lens) fails.push('⑪ 越过 cue 后未切镜头: ' + la.lens + ' ≠ ' + cues[1].lens);
+  }
+
+  /* ---- ⑫ 预判押注（P4）：窗口内长按→押对 / 不押→不押中 ---- */
+  console.log('=== causeway · 预判押注 ===');
+  const ants = await page.evaluate(() => (window.__cwChart() || {}).anticipations || []);
+  console.log('anticipations = ' + JSON.stringify(ants.map(a => [a.at, a.dir])));
+  if (ants.length !== 4) fails.push('⑫ 预判窗口数 ≠ 4: ' + ants.length);
+  if (ants.length){
+    /* 押对：窗口开启后长按同调（键盘 Space 即时进入同调） */
+    await seek(ants[0].at + 0.05);
+    await page.waitForTimeout(120);
+    const aOpen = (await cwInfo()).ant;
+    if (!aOpen.open) fails.push('⑫ 预判窗口未开启: ' + JSON.stringify(aOpen));
+    if (aOpen.dir !== ants[0].dir) fails.push('⑫ 走向符号不符谱面: ' + aOpen.dir + ' ≠ ' + ants[0].dir);
+    await page.keyboard.down('Space');
+    await page.waitForTimeout(1000);                   /* 越过段界 → 结算 */
+    const aOK = (await cwInfo()).ant;
+    await page.keyboard.up('Space');
+    console.log('押对:', JSON.stringify(aOK));
+    if (aOK.ok !== true) fails.push('⑫ 窗口内长按未判押对: ' + JSON.stringify(aOK));
+    if (aOK.amo !== 1.5) fails.push('⑫ 押对后 amo ≠ 1.5: ' + aOK.amo);
+  }
+  if (ants.length > 1){
+    /* 不押：开窗后不操作 ⇒ 押错/不押与不押等价，amo 回 1.0（零惩罚） */
+    await seek(ants[1].at + 0.05);
+    await page.waitForTimeout(1000);
+    const aNo = (await cwInfo()).ant;
+    console.log('不押:', JSON.stringify(aNo));
+    if (aNo.ok !== false) fails.push('⑫ 不押未结算为未押中: ' + JSON.stringify(aNo));
+    if (aNo.amo !== 1.0) fails.push('⑫ 不押后 amo ≠ 1.0: ' + aNo.amo);
+  }
+
+  /* ---- ⑬ 同调长按（P4）：长音结束拍点松手 → Perfect，倍率进入 (1, 1.5] ---- */
+  console.log('=== causeway · 同调长按 ===');
+  const sus = await page.evaluate(() => (window.__cwChart() || {}).sustains || []);
+  console.log('sustains = ' + sus.length + ' 首段 t0=' + (sus[0] && sus[0].t0) + ' t1=' + (sus[0] && sus[0].t1));
+  if (!sus.length) fails.push('⑬ 谱面未含长音: 0');
+  else {
+    await seek(sus[0].t0 + 0.15);                      /* 长音进行中按下同调 */
+    await page.keyboard.down('Space');
+    await page.waitForTimeout(120);
+    await page.evaluate(tv => window.__cwAutoRelease(tv), sus[0].t1);   /* 恰在结束拍点松手 */
+    await page.waitForTimeout(1500);
+    await page.keyboard.up('Space');
+    const rs = await cwInfo();
+    console.log('同调:', JSON.stringify(rs.reso), ' mult=' + rs.score.mult);
+    if (!(rs.reso.perfect >= 1)) fails.push('⑬ 结束拍点松手未判 Perfect: ' + JSON.stringify(rs.reso));
+    if (!(rs.score.mult > 1 && rs.score.mult <= 1.5)) fails.push('⑬ 同调倍率越界: ' + rs.score.mult);
+  }
 
   if (errs.length) { console.log('ERRORS:\n' + errs.join('\n')); fails.push(errs.length + ' 条控制台报错'); }
   console.log(fails.length ? ('\n✗ FAIL\n  - ' + fails.join('\n  - ')) : '\n✓ PASS (causeway)');
