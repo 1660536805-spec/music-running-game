@@ -1328,10 +1328,11 @@ function buildHome(){
     ltr.position.set(Math.cos(la)*ld, 0.9, Math.sin(la)*ld); lc.add(ltr);
   }
 
-  /* 右侧主浮空岛：屏幕 ~ (0.74, 0.40) */
+  /* 右侧主浮空岛：参考图屏幕 ~ (0.74→0.83, 0.40)
+     构图校正：x 15.5→19.5（原版偏左，参考图该岛被右画框切边、更靠右；零 rnd，不影响 heroC） */
   var isl = floatingIsland({ r: 7.8, seg: 12, top: 0x83C15F, cliff: 0xDEE3D7, rock: 0xD4D6C4,
                              thick: 1.6, coneH: 8.5, chunks: 6, bumpy: 1.0 });
-  isl.position.set(15.5, 9.0, -24);
+  isl.position.set(19.5, 9.0, -24);
   S.add(isl);
   /* 岩体地层带：草皮下方两圈浅→深色岩层，破除"白萝卜"式的单调岩体 */
   add(isl, new THREE.CylinderGeometry(7.90, 7.55, 1.05, 12, 1),
@@ -1383,10 +1384,12 @@ function buildHome(){
     });
     tt.position.set(Math.cos(a2)*d2, 0.5, Math.sin(a2)*d2); isl.add(tt);
   }
-  /* 巨环遗迹：粗壮分段石环立于岛顶，屏幕 ~ (0.76, 0.19) */
+  /* 巨环遗迹：粗壮分段石环立于岛顶，参考图屏幕 ~ (0.83, 0.17)、直径约画面宽 30%
+     （原版 R6.2 偏小 → 用 scale 1.2 整体放大，避免改 ringMonument 内部几何） */
   var gate = ringMonument();
   gate.position.set(-1.2, 6.2, -1.4);
   gate.rotation.set(-0.14, 0.44, 0.04);
+  gate.scale.setScalar(1.2);
   isl.add(gate);
 
   /* 岛顶增补：白墙紫顶小楼 ×6 + 紫粉树 ×3（确定性坐标，不消耗随机数） */
@@ -1446,9 +1449,11 @@ function buildHome(){
     S.add(small);
   }
 
-  /* 巨大环形星球：屏幕 ~ (0.41, 0.19) —— 参考图为粉紫色气态巨行星 */
-  var pl = bigPlanet({ r: 30, body: 0xD3B4E2, band: 0xF0E2F6, ring: 0xF7ECFA, ringRot: [1.44, 0.26, 0.30] });
-  pl.position.set(-31, 104, -205); S.add(pl);
+  /* 巨大环形星球：参考图屏幕 ~ (0.49, 0.19)，直径约画面宽 36%
+     构图校正：r 30→25（原版偏大约 40%）、x -31→-16（原版偏左，屏幕中心 0.41→约 0.49）、
+     y 104→112（略微上移）。bigPlanet 零 rnd → 不影响 heroC */
+  var pl = bigPlanet({ r: 25, body: 0xD3B4E2, band: 0xF0E2F6, ring: 0xF7ECFA, ringRot: [1.44, 0.26, 0.30] });
+  pl.position.set(-16, 112, -205); S.add(pl);
   /* 右上小环星：屏幕 ~ (0.80, 0.10) */
   var pl2 = bigPlanet({ r: 7.5, body: 0xD3E5F3, band: 0xEFF6FC, ring: 0xF4F9FC, ringRot: [1.40, -0.20, -0.30] });
   pl2.position.set(114, 102, -252); S.add(pl2);
@@ -1463,11 +1468,23 @@ function buildHome(){
   hero.rotation.y = 0.26;
   S.add(hero);
 
-  /* 英雄旁的黄色晶体 + 右下粉青晶簇（参考图前景水晶为粉+青色系） */
+  /* 英雄旁的黄色晶体 + 右下粉青晶簇（参考图前景水晶为粉+青色系）
+     C5 构图校正：右下晶簇原在 (9.0,·,3.2)，投影到屏幕 x≈1.09（出画、几乎不可见）；
+     移至 (7.2,·,2.4)（屏幕 ≈0.90/0.94）并放大 h1.8→2.4。仅改参数/坐标，
+     crystalCluster 内 rnd 调用次数不变 → 全局随机序列零漂移。 */
   var yc = crystalCluster({ h: 1.1, color: 0xE7BE55, color2: 0xF0D27A, n: 2, sides: 5, glow: 0.5 });
   yc.position.set(-1.15, gh(-1.15, 1.15), 1.15); S.add(yc);
-  var pk = crystalCluster({ h: 1.8, color: 0xF08FC0, color2: 0x64D4EF, n: 3, sides: 5, glow: 0.4 });
-  pk.position.set(9.0, gh(9.0, 3.2), 3.2); S.add(pk);
+  var pk = crystalCluster({ h: 2.4, color: 0xF06FB4, color2: 0x8FD8EE, n: 3, sides: 5, glow: 0.5 });
+  pk.position.set(7.2, gh(7.2, 2.4), 2.4); S.add(pk);
+  /* 近景右下亮粉晶簇：补参考图底缘的粉色水晶焦点（gemCluster 确定性、零 rnd 消耗） */
+  var pkA = gemCluster(2.6, 0xF06FB4, 0xF7B0D8, 0.90);
+  pkA.position.set(6.4, gh(6.4, 1.5), 1.5); S.add(pkA);
+  var pkB = gemCluster(1.8, 0xF08FC0, 0xF7C6E4, 0.85);
+  pkB.position.set(8.7, gh(8.7, 2.9), 2.9); S.add(pkB);
+  /* 晶簇脚下粉色光晕（确定性：单面色片，呼应既有 gemCluster 用法） */
+  add(S, new THREE.PlaneGeometry(10, 10),
+    basic(0xF06FB4, { transparent:true, opacity:0.26, additive:true, depthWrite:false }),
+    6.9, gh(6.9, 2.1) + 0.10, 2.1, { rot:[-Math.PI/2,0,0], cast:false, recv:false }).renderOrder = 1;
 
   /* S3 生命感：飘落花瓣 + 高空鸟群（走 dseq 独立随机流，零全局 rnd → 构图零漂移） */
   var petals = petalFall({ n: 70, color: 0xFFC2E4, w: 24, y0: 0.2, y1: 13, z0: 2, z1: 44,
@@ -1977,7 +1994,9 @@ function buildBase(){
   var isl = floatingIsland({ r: 36, seg: 14, top: 0x74AB62, cliff: 0x86A08E, rock: 0x7C939A,
                              thick: 3.0, coneH: 26, chunks: 8, bumpy: 1.2 });
   isl.position.set(-12.0, -6.0, -46);
-  isl.scale.set(1.08, 0.63, 1.08);
+  /* 构图校正：1.08→1.12（逐行天空占比测得 cur 天空比参考多 5.7pt，略放大主岛回收天空）。
+     纯缩放，不消耗 rnd、不影响 heroC */
+  isl.scale.set(1.12, 0.66, 1.12);
   S.add(isl);
   /* 岛缘岩层分带：草皮 → 浅岩 → 深岩，形成参考图里的崖壁分层 */
   add(isl, new THREE.CylinderGeometry(35.6, 35.0, 2.4, 14, 1),

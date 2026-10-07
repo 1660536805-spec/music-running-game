@@ -52,7 +52,9 @@ def sky_like(a):
     hue *= 60
     is_blue = (hue >= 176) & (hue <= 278) & (sat >= 0.10) & (val >= 0.42)
     is_haze = (val >= 0.74) & (sat <= 0.24)
-    return is_blue | is_haze
+    is_pale = (val >= 0.82) & (sat <= 0.34)   # 暖色地平线雾（沙漠那层淡粉/奶油色天空）
+    is_green = (hue >= 78) & (hue <= 165) & (sat > 0.16)   # 草地/植被：即便很亮也不算天空
+    return (is_blue | is_haze | is_pale) & ~is_green
 
 
 def sky_mask(a):
