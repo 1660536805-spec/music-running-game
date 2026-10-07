@@ -9,6 +9,5 @@
 声浪星球.batch*.html
 *.bak
 
-# 调试输出图（保留正式交付图）
-out/_*.png
-out/*_v2.png
+# 产出图（构建产物，不入库；本地可随时由 tools/quad.js 等重新生成）
+out/

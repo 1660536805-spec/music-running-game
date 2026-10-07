@@ -5,6 +5,13 @@
 > **验收基准分辨率**：`1672 × 941`，约 16:9。  
 > **最重要原则**：**不重新设计，不自由发挥，不把参考图当灵感图；参考图就是视觉 Source of Truth。**
 
+> **⚠️ 校准说明（本轮加注 · 2026-10）**
+> - **本文件针对的原型已换代**：文中反复提到的「现有原型」指 `声浪星球-3D原型.html`（旧）；当前 **Source of Truth 原型是 `声浪星球.html`**（单文件、纯程序化、零外部资产）。
+> - **§17 入口文件名有误**：实际入口是 **`声浪星球.html`**，不是 `index.html`。
+> - **材质口径不一致**：文中给的材质规范（`MeshStandardMaterial` + ACESFilmic 色调映射 + PBR）与实际实现不符 —— 实际为 **three.js r128 + `MeshLambertMaterial` + 自发光(emissive)伪造 + 加法混合 + `Sprite`**，**无后处理、无 PBR**。
+> - **参考图文件名不同**：文中写 `目标画面_reference.png`，实际为 `15645d0f-8490-47a7-a594-49aa84b6c123.png`（2×2 视觉板，TL=HOME / TR=DESERT / BL=CAVE / BR=BASE）。
+> - **有效部分**：场景拆解、机位/构图/配色意图、验收分辨率 `1672×941` 仍适用；本轮 `tools/skyline.py` / `palette.py` / `budget.js` / `playtest.js` 即其可执行的量化落地。
+
 ---
 
 # 0. 直接复制给 DeepSeek V4.1 的主指令
@@ -996,7 +1003,7 @@ draw calls：尽量 < 250
 最终至少应有：
 
 ```text
-index.html                    # 游戏入口
+声浪星球.html                 # 游戏入口（当前单文件原型；原文档误写为 index.html）
 three.min.js                  # 如原项目本地已有则继续本地
 GLTFLoader.js                 # 如使用
 assets/                       # 角色/建筑等必要模型
