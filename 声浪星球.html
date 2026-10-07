@@ -91,6 +91,14 @@
   .runbtn b{width:calc(86*var(--px));height:calc(86*var(--px));border-radius:50%;
     border:calc(2.5*var(--px)) solid rgba(255,255,255,.34);display:flex;align-items:center;justify-content:center;
     color:#fff;font-size:calc(32*var(--px));font-weight:600}
+  /* ---------- M3-CW ·《超频长阶》常驻「同调」圆钮（触摸长按屏幕的兜底通道）---------- */
+  .cwres{right:calc(150*var(--px));bottom:calc(150*var(--px))}
+  .cwres b{width:calc(126*var(--px));height:calc(126*var(--px));border-radius:50%;
+    border:calc(2.5*var(--px)) solid rgba(140,255,200,.34);background:rgba(140,255,200,.16);
+    backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;
+    color:#fff;font-size:calc(26*var(--px));font-weight:700;letter-spacing:.04em;
+    transition:background .10s,border-color .10s,transform .10s}
+  .cwres b.on{background:rgba(140,255,200,.58);border-color:rgba(140,255,200,.95);transform:scale(1.08)}
   .side{right:calc(66*var(--px));top:50%;transform:translateY(-50%);
     display:flex;flex-direction:column;gap:calc(22*var(--px))}
   .side b{width:calc(96*var(--px));height:calc(96*var(--px));border-radius:calc(26*var(--px));
@@ -2448,10 +2456,12 @@ var HUD_DEF = {
       '<div class="hud glass prompt"><kbd>← →</kbd>换道 · <kbd>空格</kbd>跳跃 · <kbd>F</kbd>交互 <em>◆</em></div>' + sideBtns();
   },
   base: function(){ return musicCard(SONGS.rice, '00:36', '03:43') + resBar() + minimap(); },
-  /* M3-CW ·《超频长阶》：单赛道操作提示（音游 HUD 由 RhythmHUD 惰性层承担，P3） */
+  /* M3-CW ·《超频长阶》：单赛道操作提示（↑/W 升 · ↓/S 降 · 长按空格 同调）+
+     常驻「同调」圆钮作触摸兜底（触摸主通道 = 上半屏轻点升 / 下半屏轻点降 / 长按任意处同调） */
   causeway: function(){
     return musicCard(SONGS.superweave, '00:00', '01:37') +
-      '<div class="hud glass prompt"><kbd>↑</kbd><kbd>W</kbd>升 · <kbd>↓</kbd><kbd>S</kbd>降 · 长按<kbd>空格</kbd>同调 <em>⚡</em></div>';
+      '<div class="hud glass prompt"><kbd>↑</kbd><kbd>W</kbd>升 · <kbd>↓</kbd><kbd>S</kbd>降 · 长按<kbd>空格</kbd>同调 <em>⚡</em></div>' +
+      '<div class="hud rbtns cwres"><b data-act="resonate">同调</b></div>';
   }
 };
 
@@ -2472,24 +2482,28 @@ function buildHUD(){
   }
   document.getElementById('divider').classList.toggle('on', SHOWCASE);
   Array.prototype.forEach.call(host.querySelectorAll('.menu button'), function(b){
-    b.addEventListener('click', function(){ if (!SHOWCASE) setScene(b.getAttribute('data-go')); });
+    /* 点击即用户手势 → 顺带初始化音频，使进入 causeway 时 BGM 立刻可起播（否则要等下一次按键） */
+    b.addEventListener('click', function(){ if (!SHOWCASE){ initAudio(); setScene(b.getAttribute('data-go')); } });
   });
-  /* §0.4-2/-3：HUD 动作分流——跑=冲刺(按住) / 跳=跳跃 / ♪=踩拍 */
+  /* §0.4-2/-3：HUD 动作分流——跑=冲刺(按住) / 跳=跳跃 / ♪=踩拍 / 同调=长按(M3-CW) */
   Array.prototype.forEach.call(host.querySelectorAll('[data-act]'), function(el){
     el.style.pointerEvents = 'auto';
     var act = el.getAttribute('data-act');
+    if (act === 'resonate') btnRes = el;                    /* M3-CW：供 CWInput 切换按下态样式 */
     el.addEventListener('pointerdown', function(e){
       e.stopPropagation();
       if (act === 'jump') doJump();
       else if (act === 'run') Input.btn.sprint = true;
       else if (act === 'beat') BeatClock.tap();
+      else if (act === 'resonate') CWInput.begin();         /* M3-CW：长按同调（触摸兜底通道） */
       initAudio(); if (actx && actx.state === 'suspended') actx.resume();
       m1Sfx('uiClick');
     });
-    function releaseRun(){ if (act === 'run') Input.btn.sprint = false; }
-    el.addEventListener('pointerup', releaseRun);
-    el.addEventListener('pointerleave', releaseRun);
-    el.addEventListener('pointercancel', releaseRun);
+    function release(){ if (act === 'run') Input.btn.sprint = false;
+                        if (act === 'resonate') CWInput.end(); }
+    el.addEventListener('pointerup', release);
+    el.addEventListener('pointerleave', release);
+    el.addEventListener('pointercancel', release);
   });
   /* M3-OP：虚拟摇杆已移除 → 左右换道改由「屏幕半区轻点 / ← → 键」承担（见下方指针监听） */
 }
@@ -2537,6 +2551,11 @@ function initAudio(){
     master = actx.createGain(); master.gain.value = 0.14; master.connect(actx.destination);
     nextBeat = actx.currentTime + 0.1;
   } catch(e){ actx = null; }
+  if (actx){
+    /* M3-CW：首次取得 AudioContext（用户手势）后补齐音乐总线 / 解码 BGM / 起播待播曲 */
+    initMusicBus(); bgmDecode();
+    if (BGM.want && !BGM.playing) BGM.start();
+  }
 }
 function kick(t){
   var o = actx.createOscillator(), g = actx.createGain();
@@ -2555,6 +2574,8 @@ function hat(t){
 }
 function scheduleAudio(){
   if (!actx) return;
+  /* M3-CW：单赛道关由内置 BGM 接管节奏 ⇒ 停播既有 kick/hat（避免与 BGM 打架、避免谱面时钟错位） */
+  if (LEVELS[cur] && LEVELS[cur].mode === 'single-track') return;
   while (nextBeat < actx.currentTime + 0.18){
     kick(nextBeat); if (beatCount % 2 === 1) hat(nextBeat);
     beatCount++; nextBeat += 60/bpm;
@@ -2564,20 +2585,34 @@ function scheduleAudio(){
 /* §7.5-1：键盘统一汇入 Input.keys；跳跃保持 空格/↑；F 改绑为交互/收集（§0.4-1） */
 /* ---- M3-OP 指针输入：屏幕左右半区轻点 → 换道（替代虚拟摇杆；主通道，1 帧内响应）----
    跳/跑仍由屏幕按钮与键盘承担；半区轻点在 pointerdown 即时触发（零手势识别），
-   故"水平滑动"天然等价于首帧轻点，无需独立识别，也不会双触发。 */
+   故"水平滑动"天然等价于首帧轻点，无需独立识别，也不会双触发。
+   M3-CW：causeway 下主通道改为「上半屏轻点=升 / 下半屏轻点=降 / 长按任意处=同调」
+   （docs/声浪星球-关卡设计-超频长阶.md §3.2），故此处按 mode 分流。 */
+function isCw(){ return !!(LEVELS[cur] && LEVELS[cur].mode === 'single-track'); }
 renderer.domElement.addEventListener('pointerdown', function(e){
   initAudio(); if (actx && actx.state === 'suspended') actx.resume();
   var S = SCN[cur];
-  if (!S || !S.runnable) return;                 /* 仅可玩关响应换道 */
+  if (!S || !S.runnable) return;                 /* 仅可玩关响应 */
+  if (isCw()){ CWInput.press(); return; }        /* M3-CW：按下待判（轻点→升/降，长按→同调） */
   Lane.request(e.clientX < innerWidth / 2 ? -1 : 1, cur);
 });
+/* pointerup/cancel 挂 window：指针移出画布也能正确收尾；CWInput 内部有状态守卫，重复调用无副作用 */
+addEventListener('pointerup', function(e){ if (isCw()) CWInput.release(e.clientY < innerHeight / 2 ? 1 : -1); });
+addEventListener('pointercancel', function(){ if (isCw()) CWInput.cancel(); });
 addEventListener('keydown', function(e){
   Input.keys[e.code] = true;
-  if (e.code === 'Space' || e.code === 'ArrowUp'){ e.preventDefault(); doJump(); }
-  /* M3-OP：键盘换道（← → / A D）；长按不重复触发（e.repeat 守卫） */
-  if (!e.repeat){
-    if (e.code === 'ArrowLeft'  || e.code === 'KeyA'){ e.preventDefault(); Lane.request(-1, cur); }
-    if (e.code === 'ArrowRight' || e.code === 'KeyD'){ e.preventDefault(); Lane.request( 1, cur); }
+  if (isCw()){
+    /* M3-CW：单赛道关——↑/W 升、↓/S 降、长按 空格 同调；不触发跳跃 / 换道 */
+    if (e.code === 'ArrowUp'   || e.code === 'KeyW'){ e.preventDefault(); if (!e.repeat) CWInput.lift(); }
+    if (e.code === 'ArrowDown' || e.code === 'KeyS'){ e.preventDefault(); if (!e.repeat) CWInput.dive(); }
+    if (e.code === 'Space'){ e.preventDefault(); if (!e.repeat) CWInput.begin(); }
+  } else {
+    if (e.code === 'Space' || e.code === 'ArrowUp'){ e.preventDefault(); doJump(); }
+    /* M3-OP：键盘换道（← → / A D）；长按不重复触发（e.repeat 守卫） */
+    if (!e.repeat){
+      if (e.code === 'ArrowLeft'  || e.code === 'KeyA'){ e.preventDefault(); Lane.request(-1, cur); }
+      if (e.code === 'ArrowRight' || e.code === 'KeyD'){ e.preventDefault(); Lane.request( 1, cur); }
+    }
   }
   if (e.key === '1') setScene('home');
   if (e.key === '2') setScene('desert');
@@ -2586,8 +2621,11 @@ addEventListener('keydown', function(e){
   if (e.key === '5') setScene('causeway');
   if (e.key === 'f' || e.key === 'F') M1.interact();
 });
-addEventListener('keyup', function(e){ Input.keys[e.code] = false; });
-addEventListener('blur', function(){ Input.keys = {}; Input.btn.sprint = false; });
+addEventListener('keyup', function(e){
+  Input.keys[e.code] = false;
+  if (e.code === 'Space' && isCw()) CWInput.end();   /* M3-CW：松开空格 = 同调松手 */
+});
+addEventListener('blur', function(){ Input.keys = {}; Input.btn.sprint = false; if (isCw()) CWInput.cancel(); });
 
 /* ==========================================================================
    6. 主循环
@@ -2930,12 +2968,29 @@ var Lane = {
      · FREEZE 下不更新（causeway 亦不在 RENDER_ORDER）⇒ 定帧零漂移，双保险。 */
 var Track = {
   layer: 'lo', target: 'lo', t: 1, fromY: 0, toY: 0, layerY: 0,
-  pitch: 0, roll: 0, buf: 0, bufT: 0, bump: 0, bumpDir: 0, songT: 0,
+  pitch: 0, roll: 0, buf: 0, bufT: 0, bump: 0, bumpDir: 0, songT: 0, section: null,
   isCw: function(k){ return !!(LEVELS[k] && LEVELS[k].mode === 'single-track'); },
+  /* ---- 谱面时钟几何（镜像 tools/gen_causeway.js：分段常量速度的闭式积分）----
+     距离 D(t) / 世界 z(t) / 反函数 t(D)：供 Track 起播锚定与 P3 障碍落位使用。 */
+  distAt: function(t){
+    var ss = Chart.data ? Chart.data.sections : null; if (!ss) return 0;
+    var d = 0;
+    for (var i = 0; i < ss.length; i++){ var s = ss[i], a = Math.min(t, s.t1), b = s.t0; if (a > b) d += s.speed * (a - b); }
+    return d;
+  },
+  zOf: function(t){ return CW.Z_START - Track.distAt(t); },
+  tAtDist: function(d){
+    var ss = Chart.data ? Chart.data.sections : null; if (!ss) return 0;
+    var acc = 0;
+    for (var i = 0; i < ss.length; i++){ var s = ss[i], seg = s.speed * (s.t1 - s.t0);
+      if (d < acc + seg) return s.t0 + (d - acc) / s.speed; acc += seg; }
+    return ss[ss.length - 1].t1;
+  },
   reset: function(k){
     Track.layer = 'lo'; Track.target = 'lo'; Track.t = 1;
     Track.layerY = 0; Track.fromY = 0; Track.toY = 0;
-    Track.pitch = 0; Track.roll = 0; Track.buf = 0; Track.bufT = 0; Track.bump = 0; Track.songT = 0;
+    Track.pitch = 0; Track.roll = 0; Track.buf = 0; Track.bufT = 0; Track.bump = 0;
+    Track.songT = 0; Track.energy = 0;
   },
   /* 升(+1) / 降(−1)：一次输入翻转一层；同层再按 ⇒ 越界软反馈，不算失败 */
   request: function(dir, k){
@@ -2960,6 +3015,10 @@ var Track = {
   energy: 0,                                  /* P2 起由 Chart 写入当前段落能量 */
   update: function(dt, k){
     if (dt <= 0 || !Track.isCw(k)) return;
+    /* 音乐时钟：以 BGM 播放位置为准（与谱面同源采样 ⇒ 逐拍对齐）；段落能量驱动冲刺速度 */
+    Track.songT = BGM.songT();
+    var sec = Chart.ready ? Chart.sectionAt(Track.songT) : null;
+    if (sec){ Track.energy = sec.energy; Track.section = sec; }
     if (Track.bufT > 0){ Track.bufT = Math.max(0, Track.bufT - dt); if (Track.bufT === 0) Track.buf = 0; }
     if (Track.bump > 0) Track.bump = Math.max(0, Track.bump - dt);
     if (Track.t < 1){
@@ -3032,6 +3091,13 @@ var BeatClock = {
   setSong: function(s){ if (!s) return; BeatClock.bpm = s.bpm; bpm = s.bpm; BeatClock.phase = 0; },
   update: function(dt){
     var bp = 60 / BeatClock.bpm;
+    /* M3-CW：单赛道关以 BGM 播放位置为主时钟（其 kick/hat 调度已停播 ⇒ 不能再用 nextBeat 推导） */
+    if (LEVELS[cur] && LEVELS[cur].mode === 'single-track' && BGM.playing){
+      var sp = BGM.songT();
+      BeatClock.phase = (((sp % bp) + bp) % bp) / bp;
+      BeatClock.index = Math.floor(sp / bp);
+      return;
+    }
     if (actx && actx.state === 'running'){
       var since = bp - (nextBeat - actx.currentTime);
       BeatClock.phase = (((since % bp) + bp) % bp) / bp;
@@ -3074,6 +3140,136 @@ function m1Sfx(kind){
     else if (kind === 'uiClick')     tone('triangle', 880, 880, 0.06, 0.16);
   } catch(e){}
 }
+
+/* ==========================================================================
+   M3-CW ·《超频长阶》运行时支撑：BGM 播放 / 真值谱面 / 单赛道输入
+   --------------------------------------------------------------------------
+   设计约束：
+     · BGM 走独立音乐总线（不并入 SFX master），避免与既有 kick/hat 互相影响；
+     · **不在无用户手势时创建 AudioContext**（规避自动播放告警）：进关仅置 want + 预取，
+       首次手势触发 initAudio 后再解码并起播；
+     · 起播时按"已行进距离"反解 songT 做锚定 ⇒ 无论何时开声，音乐都与角色位置对齐；
+     · Chart 与 WAV 同源生成（tools/gen_causeway.js）⇒ 无需运行时音频分析。
+   ========================================================================== */
+var musicBus = null, bgmSrc = null, bgmBuf = null, bgmAB = null, bgmT0 = 0;
+function initMusicBus(){
+  if (musicBus || !actx) return;
+  musicBus = actx.createGain(); musicBus.gain.value = 0.60; musicBus.connect(actx.destination);
+}
+function loadBGM(){
+  if (bgmBuf || bgmAB || loadBGM._l) return;
+  loadBGM._l = true;
+  try {
+    fetch('assets/causeway.wav')
+      .then(function(r){ return r.arrayBuffer(); })
+      .then(function(ab){ bgmAB = ab; bgmDecode(); })
+      .catch(function(){ loadBGM._l = false; });
+  } catch(e){ loadBGM._l = false; }
+}
+/* 待 actx 就绪后再解码（decodeAudioData 必须挂在 AudioContext 上） */
+function bgmDecode(){
+  if (bgmBuf || !bgmAB || !actx) return;
+  var ab = bgmAB;
+  try {
+    actx.decodeAudioData(ab).then(function(buf){
+      bgmBuf = buf; Bus.emit('bgm:ready', {});
+      if (BGM.want && !BGM.playing) BGM.start();
+    }).catch(function(){ bgmAB = null; loadBGM._l = false; });
+  } catch(e){ bgmAB = null; loadBGM._l = false; }
+}
+var BGM = {
+  want: false, playing: false,
+  start: function(){
+    BGM.want = true;
+    if (!actx){ loadBGM(); return; }             /* 尚无声手势 → 仅预取，待 initAudio 续播 */
+    initMusicBus();
+    if (!bgmBuf){ loadBGM(); bgmDecode(); return; }
+    if (BGM.playing) return;
+    try {
+      if (bgmSrc){ try{ bgmSrc.stop(); }catch(e){} try{ bgmSrc.disconnect(); }catch(e){} }
+      bgmSrc = actx.createBufferSource(); bgmSrc.buffer = bgmBuf; bgmSrc.connect(musicBus);
+      /* 起播锚定：令 songT 与"已行进距离"一致，消除手势延迟造成的时间错位 */
+      var S = SCN[cur];
+      var dist = (S && S.hero) ? Math.max(0, CW.Z_START - S.hero.position.z) : 0;
+      var at = Track.tAtDist(dist);
+      bgmT0 = actx.currentTime - at;
+      bgmSrc.start(0);
+      BGM.playing = true;
+      Bus.emit('bgm:play', { at: +at.toFixed(3) });
+    } catch(e){ BGM.playing = false; }
+  },
+  stop: function(){
+    BGM.want = false;
+    if (bgmSrc){ try{ bgmSrc.stop(); }catch(e){} try{ bgmSrc.disconnect(); }catch(e){} bgmSrc = null; }
+    BGM.playing = false;
+  },
+  songT: function(){ return (BGM.playing && actx) ? Math.max(0, actx.currentTime - bgmT0) : 0; }
+};
+
+/* ---- M3-CW · 真值谱面（与 WAV 同源；P3 起驱动障碍/判定，P2 仅取段落能量驱动冲刺）---- */
+var Chart = {
+  data: null, ready: false, _l: false,
+  load: function(){
+    if (Chart.ready || Chart._l) return;
+    Chart._l = true;
+    try {
+      fetch('assets/causeway-chart.json')
+        .then(function(r){ return r.json(); })
+        .then(function(j){ Chart.data = j; Chart.ready = true; Bus.emit('chart:ready', {}); })
+        .catch(function(){ Chart._l = false; });
+    } catch(e){ Chart._l = false; }
+  },
+  sectionAt: function(t){
+    var ss = Chart.data ? Chart.data.sections : null; if (!ss) return null;
+    for (var i = 0; i < ss.length; i++) if (t >= ss[i].t0 && t < ss[i].t1) return ss[i];
+    return ss.length ? ss[ss.length - 1] : null;
+  }
+};
+
+/* ---- M3-CW · 单赛道输入（升 / 降 / 同调长按）----------------------------------
+   键盘：↑/W 升、↓/S 降、长按 空格 同调（在全局 keydown/keyup 处分流）。
+   触摸：上半屏轻点=升 / 下半屏轻点=降 / 长按任意处=同调（轻点与长按由 HOLD_MS 区分）。
+   兜底：HUD 常驻「同调」圆钮（按下 = begin，松手 = end）。
+   仅 causeway 生效 —— 其余关仍走 Lane 换道，互不干扰。 */
+var btnRes = null;
+var CWInput = {
+  HOLD_MS: 220, _down: false, _timer: null, resonating: false,
+  _audio: function(){ initAudio(); if (actx && actx.state === 'suspended') actx.resume(); },
+  lift: function(){ CWInput._audio(); Track.request(+1, cur); },
+  dive: function(){ CWInput._audio(); Track.request(-1, cur); },
+  press: function(){
+    CWInput._audio();
+    CWInput._down = true;
+    if (CWInput._timer) clearTimeout(CWInput._timer);
+    CWInput._timer = setTimeout(function(){
+      CWInput._timer = null; CWInput._down = false; CWInput.begin();
+    }, CWInput.HOLD_MS);
+  },
+  /* halfDir：+1 上半屏 / −1 下半屏 */
+  release: function(halfDir){
+    if (CWInput._timer){ clearTimeout(CWInput._timer); CWInput._timer = null; }
+    if (CWInput._down){ CWInput._down = false; if (halfDir > 0) CWInput.lift(); else CWInput.dive(); }
+    else if (CWInput.resonating){ CWInput.end(); }
+  },
+  cancel: function(){
+    if (CWInput._timer){ clearTimeout(CWInput._timer); CWInput._timer = null; }
+    CWInput._down = false; CWInput.end();
+  },
+  begin: function(){
+    CWInput._audio();
+    if (CWInput.resonating) return;
+    CWInput.resonating = true;
+    if (btnRes) btnRes.classList.add('on');
+    Bus.emit('cw:resonate', { on: true });
+  },
+  end: function(){
+    if (!CWInput.resonating) return;
+    CWInput.resonating = false;
+    if (btnRes) btnRes.classList.remove('on');
+    Bus.emit('cw:resonate', { on: false });
+  },
+  reset: function(){ CWInput.cancel(); }
+};
 
 /* ---- 地面波纹（落地 / 收集反馈，GDD §5.2）---- */
 function groundRipple(){
@@ -3352,6 +3548,9 @@ var M1 = {
     CameraRig.reset(k);
     Lane.reset(k, !FREEZE);          /* M3-OP：吸附到最近道；FREEZE 下保持连续值 ⇒ 定帧不变 */
     Track.reset(k);                  /* M3-CW：回到 Lo 层、清空同调/缓冲/俯仰 */
+    CWInput.reset();                 /* M3-CW：清「轻点待判 / 同调长按」状态 */
+    if (k === 'causeway'){ Chart.load(); BGM.start(); }   /* M3-CW：加载真值谱面 + 起播 BGM（待手势） */
+    else BGM.stop();                                      /* 离开单赛道关 → 停 BGM（其余关用内置 kick） */
     var S = SCN[k], sd = (S && S.scene) ? S.scene.userData : null;
     if (sd && sd.gems){
       for (var i = 0; i < sd.gems.length; i++){
@@ -3453,6 +3652,11 @@ window.__info = function(){
              camOff: CameraRig.off(cur),
              lane: Lane.info(), stopped: PlayerController.stopped, autoSpeed: CFG.SPEED_F,
              track: Track.info() };
+  /* M3-CW：单赛道运行时快照（供 causeway 门禁 / 调试） */
+  out.cw = { chart: Chart.ready, bgm: BGM.playing, audio: actx ? actx.state : null,
+             songT: +Track.songT.toFixed(3),
+             energy: +Track.energy.toFixed(2), section: (Track.section ? Track.section.kind : null),
+             resonate: CWInput.resonating, zOf: +Track.zOf(Track.songT).toFixed(2) };
   return out;
 };
 boot();

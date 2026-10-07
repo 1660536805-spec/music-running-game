@@ -5,8 +5,9 @@
      ① 定帧基线：?scene=causeway&freeze=1 下 causeway 的 heroC / calls / tris 必须与基线一致
         （causeway 不在 RENDER_ORDER ⇒ 不参与既有四场景红线，故单列一份基线自我保护）
      ② 自动前进：非 freeze 下角色应沿 −z 以 11 u/s 推进（PlayerController 复用 band 链路）
-     ③ 升降层：↑/W → hi、↓/S → lo（P2 起生效；P1 尚未接输入时标 SKIP）
-     ④ 零控制台报错
+     ③ 升降层：↑/W → hi、↓/S → lo（层目标 + 实际层 + layerY 就位）
+     ④ 单赛道运行时：真值谱面已加载 / BGM 已起播 / 段落已解析 / 长按空格进入同调 / 松手退出
+     ⑤ 零控制台报错
    用法: node tools/causeway.js [--record]
    ============================================================================ */
 'use strict';
@@ -68,18 +69,40 @@ const URL = 'http://127.0.0.1:8777/%E5%A3%B0%E6%B5%AA%E6%98%9F%E7%90%83.html';
   if (m1.heroX != null && Math.abs(m1.heroX) > 0.02) fails.push('单赛道 x 未锁中心: heroX=' + m1.heroX);
   console.log('track = ' + JSON.stringify(m1.track));
 
-  /* ---- ③ 升降层（P2 起生效）---- */
+  /* ---- ③ 升降层 ---- */
   console.log('=== causeway · 升降层 ===');
-  const canLift = await page.evaluate(() => !!(window.__info().m1.track));   /* Track 已存在 */
-  if (!canLift){ console.log('SKIP: Track 未接入'); }
+  const hasTrack = await page.evaluate(() => !!(window.__info().m1.track));   /* Track 已存在 */
+  if (!hasTrack){ console.log('SKIP: Track 未接入'); fails.push('Track 未接入'); }
   else {
-    await page.keyboard.press('ArrowUp'); await page.waitForTimeout(220);
-    const up = await page.evaluate(() => { const i = window.__info(); return { m: i.m1, s: i.causeway }; });
-    await page.keyboard.press('ArrowDown'); await page.waitForTimeout(220);
-    const dn = await page.evaluate(() => { const i = window.__info(); return { m: i.m1, s: i.causeway }; });
-    console.log('↑ → ' + JSON.stringify(up.m.track) + '   heroY=' + up.s.heroY + ' baseY=' + up.s.baseY);
-    console.log('↓ → ' + JSON.stringify(dn.m.track) + '   heroY=' + dn.s.heroY + ' baseY=' + dn.s.baseY);
+    await page.keyboard.press('ArrowUp'); await page.waitForTimeout(180);
+    const up = await page.evaluate(() => window.__info().m1.track);
+    await page.keyboard.press('ArrowDown'); await page.waitForTimeout(180);
+    const dn = await page.evaluate(() => window.__info().m1.track);
+    console.log('↑ → ' + JSON.stringify(up));
+    console.log('↓ → ' + JSON.stringify(dn));
+    if (up.target !== 'hi' || up.layer !== 'hi') fails.push('↑ 未升到 Hi: ' + JSON.stringify(up));
+    if (!(up.layerY > 0.5)) fails.push('升到 Hi 后 layerY 未就位: ' + up.layerY);
+    if (dn.target !== 'lo' || dn.layer !== 'lo') fails.push('↓ 未降到 Lo: ' + JSON.stringify(dn));
+    if (!(dn.layerY < 0.4)) fails.push('降到 Lo 后 layerY 未归零: ' + dn.layerY);
   }
+
+  /* ---- ④ 单赛道运行时：BGM / 真值谱面 / 同调长按 ---- */
+  console.log('=== causeway · 运行时（BGM/谱面/同调）===');
+  await page.keyboard.down('Space'); await page.waitForTimeout(200);
+  const rz = await page.evaluate(() => window.__info().cw);
+  await page.keyboard.up('Space');
+  console.log('cw = ' + JSON.stringify(rz));
+  if (!rz){ fails.push('未取到 cw 快照'); }
+  else {
+    if (rz.chart !== true) fails.push('真值谱面未加载: chart=' + rz.chart);
+    if (rz.bgm !== true) fails.push('BGM 未起播: bgm=' + rz.bgm + ' audio=' + rz.audio);
+    if (rz.section == null) fails.push('段落未解析: section=' + rz.section);
+    if (rz.resonate !== true) fails.push('长按空格未进入同调: resonate=' + rz.resonate);
+    if (rz.audio === 'running' && !(rz.songT > 0.1)) fails.push('音频在跑但 songT 未推进: ' + rz.songT);
+  }
+  await page.waitForTimeout(300);
+  const rzOff = await page.evaluate(() => window.__info().cw);
+  if (rzOff && rzOff.resonate !== false) fails.push('松开空格后未退出同调: ' + rzOff.resonate);
 
   if (errs.length) { console.log('ERRORS:\n' + errs.join('\n')); fails.push(errs.length + ' 条控制台报错'); }
   console.log(fails.length ? ('\n✗ FAIL\n  - ' + fails.join('\n  - ')) : '\n✓ PASS (causeway)');
