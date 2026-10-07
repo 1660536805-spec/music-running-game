@@ -1919,6 +1919,35 @@ function buildCave(){
   S.add(mtC2);
   S.userData.motes = [mtC1, mtC2];
 
+  /* ========================================================================
+     M2 · cave 可玩闭环（GDD §4.7）：贴地函数导出 + 3 采集点 + 天光柱传送台 + VFX
+     全部走 dseq / 纯参数 ⇒ 对全局 rnd() 零消耗，既有洞窟构图零漂移 */
+  S.userData.ground = chh;                        /* 供 PlayerController 贴地采样 */
+
+  var Rc = dseq(0xCA7E);
+  var _cgemCols = [[0xD85CEA, 0x9FE9F6], [0xE8843C, 0xFFD27A], [0x58D7EF, 0xB06EE8]];
+  var cgems = [];
+  for (var cgi = 0; cgi < CAVE_GEMS.length; cgi++){
+    var cgx = CAVE_GEMS[cgi][0], cgz = CAVE_GEMS[cgi][1];
+    var cgm = musicShard(_cgemCols[cgi][0], _cgemCols[cgi][1], 0.9 + Rc()*0.2);
+    var cgy = chh(cgx, cgz);
+    cgm.position.set(cgx, cgy + 1.2, cgz);
+    cgm.rotation.y = Rc()*6.283;
+    cgm.userData.groundY = cgy;
+    cgm.userData.phase = Rc()*6.283;
+    cgm.userData.rotY0 = cgm.rotation.y;
+    cgm.userData.taken = false;
+    Collectible.register(cgm);
+    S.add(cgm); cgems.push(cgm);
+  }
+  S.userData.gems = cgems;
+
+  var cpad = portalPad(3.0);
+  cpad.position.set(CAVE_PAD[0], chh(CAVE_PAD[0], CAVE_PAD[1]) + 0.02, CAVE_PAD[1]);
+  S.add(cpad); S.userData.pad = cpad;
+
+  VFX.attach(S);                                  /* 1 落地波纹 + 3 收集波纹池（cave 独立一份）*/
+
   return { scene: S, hero: hero, runnable: true };
 }
 
@@ -2285,7 +2314,7 @@ var HUD_DEF = {
   },
   desert: function(){ return musicCard(SONGS.sunny, '01:24', '04:29') + taskCard() + joystick() + runBtn() + rbtns(); },
   cave: function(){
-    return musicCard(SONGS.nocturne, '02:08', '03:46') +
+    return musicCard(SONGS.nocturne, '02:08', '03:46') + taskCard() +
       '<div class="hud glass prompt"><kbd>空格</kbd>跳跃 · <kbd>F</kbd>交互 <em>◆</em></div>' + sideBtns() + joystick();
   },
   base: function(){ return musicCard(SONGS.rice, '00:36', '03:43') + resBar() + minimap(); }
@@ -2587,7 +2616,8 @@ function loop(now){
         PlayerController.update(dt, cur, SCN[cur]);
         Collectible.update(dt, cur, SCN[cur]);
         Portal.update(dt, cur, SCN[cur]);
-        VFX.update(dt);
+        CameraRig.update(dt, cur);                 /* M2：方案 B 微跟随（仅可玩关） */
+        VFX.update(dt, cur);
       }
       updateScene(cur, dt);
       renderer.setViewport(0, 0, innerWidth, innerHeight);
@@ -2638,16 +2668,24 @@ var SONGS = {
   rice:     { name: '稻香', artist: '周杰伦', bpm: 110, total: '03:43', wave: 4.7 }
 };
 
-/* ---- 关卡定义（GDD §4.2 / §4.6）----
-   浅纵深轻量关：晶体的 z 被压缩进可玩带，x 布局签名沿用 §4.6（2.0 / −3.5 / 3.5）*/
+/* ---- 关卡定义（GDD §4.2 / §4.6 / §4.7）----
+   M1：desert 浅纵深轻量关（晶体 z 压缩进可玩带，x 布局签名沿用 §4.6）。
+   M2：cave 接入同一套模块；band = 可玩带 [xMin, xMax, zMin, zMax]；next = 传送目标关。*/
 var M1_GEMS = [[2.0, -8.0], [-3.5, -14.0], [3.5, -20.0]];
 var M1_PAD  = [1.0, -23.0];
+/* M2 · cave 采集点（§4.7：左右大晶簇地标 + 天光柱下）与天光柱传送落点 */
+var CAVE_GEMS = [[-11.0, -20.0], [10.5, -14.0], [-3.4, -38.0]];
+var CAVE_PAD  = [-3.4, -42.0];
 var LEVELS = {
-  desert: { song: 'sunny', spawn: [0.6, -1.5],
+  desert: { song: 'sunny', spawn: [0.6, -1.5], ground: 'dh',
+            band: [-7.0, 7.0, -24.0, 1.0], padR: 3.0, summitZ: -18.0, next: 'cave',
             tasks: [ { id: 'gems',   label: '收集 3 个音乐晶体', need: 3 },
                      { id: 'portal', label: '激活传送装置',     need: 1 },
                      { id: 'summit', label: '到达山顶',         need: 1 } ] },
-  cave:   { song: 'nocturne', spawn: null, tasks: [ { id: 'gems', label: '收集 3 个音乐晶体', need: 3 } ] },
+  cave:   { song: 'nocturne', spawn: [-1.75, -3.2], ground: 'chh',
+            band: [-14.0, 14.0, -44.0, 3.0], padR: 3.0, summitZ: null, next: 'base',
+            tasks: [ { id: 'gems',   label: '收集 3 个音乐晶体', need: 3 },
+                     { id: 'portal', label: '激活传送装置',     need: 1 } ] },
   base:   { song: 'rice',     spawn: null, tasks: [] }
 };
 
@@ -2756,34 +2794,39 @@ function groundRipple(){
   return m;
 }
 var VFX = {
-  _land: null, _pool: [], _i: 0,
+  _i: 0,
   attach: function(S){
-    VFX._land = groundRipple(); S.add(VFX._land);
-    VFX._pool = [];
-    for (var i = 0; i < 3; i++){ var r = groundRipple(); S.add(r); VFX._pool.push(r); }
+    var land = groundRipple(); S.add(land);
+    var pool = [];
+    for (var i = 0; i < 3; i++){ var r = groundRipple(); S.add(r); pool.push(r); }
+    S.userData.vfx = { land: land, pool: pool };   /* per-scene：desert / cave 各持一份 */
   },
+  _scene: function(k){ var S = SCN[k]; return (S && S.scene) ? S.scene.userData.vfx : null; },
   _fire: function(mesh, x, y, z, r0, r1, life, op){
     mesh.visible = true; mesh.position.set(x, y, z); mesh.scale.setScalar(r0);
     mesh.material.opacity = op;
     mesh.userData.vf = { t: 0, life: life, r0: r0, r1: r1, op: op };
   },
-  land:  function(x, y, z){ if (VFX._land) VFX._fire(VFX._land, x, y, z, 0.55, 3.2, 0.5, 0.7); },
+  land:  function(x, y, z){ var v = VFX._scene(cur); if (v && v.land) VFX._fire(v.land, x, y, z, 0.55, 3.2, 0.5, 0.7); },
   burst: function(x, y, z){
-    if (!VFX._pool.length) return;
-    var m = VFX._pool[VFX._i++ % VFX._pool.length];
+    var v = VFX._scene(cur);
+    if (!v || !v.pool.length) return;
+    var m = v.pool[VFX._i++ % v.pool.length];
     VFX._fire(m, x, y, z, 0.35, 2.4, 0.42, 0.85);
   },
-  update: function(dt){
+  update: function(dt, k){
+    var v = VFX._scene(k);
+    if (!v) return;
     function step(m){
       if (!m || !m.visible) return;
-      var v = m.userData.vf; v.t += dt;
-      var kk = v.t / v.life;
+      var vv = m.userData.vf; vv.t += dt;
+      var kk = vv.t / vv.life;
       if (kk >= 1){ m.visible = false; m.material.opacity = 0; return; }
-      m.scale.setScalar(v.r0 + (v.r1 - v.r0)*kk);
-      m.material.opacity = v.op * (1 - kk);
+      m.scale.setScalar(vv.r0 + (vv.r1 - vv.r0)*kk);
+      m.material.opacity = vv.op * (1 - kk);
     }
-    step(VFX._land);
-    for (var i = 0; i < VFX._pool.length; i++) step(VFX._pool[i]);
+    step(v.land);
+    for (var i = 0; i < v.pool.length; i++) step(v.pool[i]);
   }
 };
 
@@ -2857,7 +2900,9 @@ function m1Collect(g){
   TaskSystem.progress('gems', 1);
   VFX.burst(g.position.x, g.userData.groundY + 0.12, g.position.z);
   m1Sfx('collect');
-  if (GameState.get('gems') >= 3 && GameState.portal === 'dormant'){
+  var need = 3, lv = LEVELS[cur], ts = lv && lv.tasks;
+  if (ts) for (var qi = 0; qi < ts.length; qi++) if (ts[qi].id === 'gems') need = ts[qi].need;
+  if (GameState.get('gems') >= need && GameState.portal === 'dormant'){
     GameState.portal = 'charged';
     Bus.emit('portal:charged', {});
     m1Sfx('beatPerfect');
@@ -2866,7 +2911,7 @@ function m1Collect(g){
 var Collectible = {
   register: function(mesh){ mesh.userData.collectible = true; },
   update: function(dt, k, S){
-    if (k !== 'desert' || !S || !S.scene) return;
+    var lv = LEVELS[k]; if (!lv || !lv.band || !S || !S.scene) return;
     var gs = S.scene.userData.gems;
     if (!gs) return;
     var h = S.hero; if (!h) return;
@@ -2893,7 +2938,7 @@ var TaskSystem = {
 /* ---- 传送装置状态机（GDD §3.4）：dormant → charged → activated ---- */
 var Portal = {
   update: function(dt, k, S){
-    if (k !== 'desert' || !S || !S.scene || !S.hero) return;
+    var lv = LEVELS[k]; if (!lv || !lv.band || !S || !S.scene || !S.hero) return;
     var pad = S.scene.userData.pad;
     if (!pad) return;
     var st = GameState.portal;
@@ -2901,15 +2946,17 @@ var Portal = {
     pad.scale.setScalar(1 + Math.sin(pad.userData.t*2.2)*0.05);
     var ring = pad.userData.ring;
     if (ring) ring.material.opacity = st === 'dormant' ? 0.32 : (st === 'charged' ? 0.9 : 1.0);
-    if (S.hero.position.z <= -18 && GameState.get('summit') < 1) TaskSystem.progress('summit', 1);
+    if (lv.summitZ != null && S.hero.position.z <= lv.summitZ && GameState.get('summit') < 1) TaskSystem.progress('summit', 1);
     if (st === 'charged'){
+      var rr3 = lv.padR || CFG.R_PORTAL;
       var dx = pad.position.x - S.hero.position.x, dz = pad.position.z - S.hero.position.z;
-      if (dx*dx + dz*dz <= CFG.R_PORTAL*CFG.R_PORTAL){
+      if (dx*dx + dz*dz <= rr3*rr3){
         GameState.portal = 'activated';
         GameState.add('portal', 1);
         Bus.emit('portal:go', {});
         m1Sfx('portalGo'); HUD.flash(CFG.FADE);
-        setTimeout(function(){ setScene('cave'); }, 380);
+        var nx = lv.next || 'home';
+        setTimeout(function(){ setScene(nx); }, 380);
       }
     }
   }
@@ -2919,9 +2966,10 @@ var Portal = {
 var PlayerController = {
   vx: 0, vz: 0, moved: false,
   reset: function(){ PlayerController.vx = 0; PlayerController.vz = 0; PlayerController.moved = false; },
-  mode: function(k){ return (k === 'desert' || k === 'cave') ? 'run' : 'idle'; },
+  mode: function(k){ return (LEVELS[k] && LEVELS[k].band) ? 'run' : 'idle'; },
   update: function(dt, k, S){
-    if (dt <= 0 || k !== 'desert') return;                 /* M1：仅 desert 可自由移动 */
+    var lv = LEVELS[k];
+    if (dt <= 0 || !lv || !lv.band) return;                /* M2：desert / cave 均可自由移动 */
     if (!S || !S.runnable || !S.hero || !S.scene || !S.scene.userData.ground) return;
     var ground = S.scene.userData.ground;
     var mx = Input.move.x, mz = Input.move.z, l = Math.sqrt(mx*mx + mz*mz);
@@ -2935,11 +2983,52 @@ var PlayerController = {
     if (!PlayerController.moved && l === 0 &&
         Math.abs(PlayerController.vx) < 1e-4 && Math.abs(PlayerController.vz) < 1e-4) return;
     var h = S.hero;
-    h.position.x = clamp(h.position.x + PlayerController.vx*dt, CFG.X_MIN, CFG.X_MAX);
-    h.position.z = clamp(h.position.z + PlayerController.vz*dt, CFG.Z_MIN, CFG.Z_MAX);
+    h.position.x = clamp(h.position.x + PlayerController.vx*dt, lv.band[0], lv.band[1]);
+    h.position.z = clamp(h.position.z + PlayerController.vz*dt, lv.band[2], lv.band[3]);
     if (l > 0) h.rotation.y = Math.atan2(-mx, -mz);        /* 模型默认正面 = −z */
     h.userData.baseY = ground(h.position.x, h.position.z);
     PlayerController.moved = true;
+  }
+};
+
+/* ---- 相机装置 · 方案 B 微跟随（GDD §3.9 / §7.2 M2；Q: 第一关也跟随）
+   以定帧机位 CAM[k] 为基准，按 K·(hero − 出生点) 做 x/z **纯平移**跟随
+   （相机与注视点同量平移、朝向不变 ⇒ 望远镜式推近，只改取景范围不改朝向）；
+   位移经指数平滑（滞后感即"微"）。出生点位移为 0 ⇒ 相机与定帧逐位一致，
+   故"静止于出生点"时 heroC 仍零漂移；FREEZE（截图门禁）下整段不执行。
+   仅对可玩关（存在 LEVELS[k].band）生效；home/base 保持固定机位。 */
+var CameraRig = {
+  K: 0.8, RATE: 5.0,
+  _base: {}, _look: {}, _off: {}, _spawn: {},
+  init: function(k){
+    var S = SCN[k]; if (!S || !S.camera || !S.hero || !S.hero.home) return;
+    var v = camVectors(CAM[k]);
+    CameraRig._base[k]  = v.pos.clone();
+    CameraRig._look[k]  = v.look.clone();
+    CameraRig._off[k]   = new THREE.Vector3(0, 0, 0);
+    CameraRig._spawn[k] = S.hero.home.clone();
+  },
+  off: function(k){ var o = CameraRig._off[k]; return o ? [+o.x.toFixed(3), +o.y.toFixed(3), +o.z.toFixed(3)] : null; },
+  reset: function(k){
+    if (CameraRig._off[k]) CameraRig._off[k].set(0, 0, 0);
+    var S = SCN[k];
+    if (S && S.camera && CameraRig._base[k]){
+      S.camera.position.copy(CameraRig._base[k]);
+      S.camera.lookAt(CameraRig._look[k]);
+    }
+  },
+  update: function(dt, k){
+    var lv = LEVELS[k]; if (!lv || !lv.band) return;      /* 仅可玩关跟随 */
+    var S = SCN[k], base = CameraRig._base[k], look = CameraRig._look[k], sp = CameraRig._spawn[k];
+    if (!S || !S.camera || !S.hero || !base || !sp) return;
+    var h = S.hero.position;
+    var tx = (h.x - sp.x) * CameraRig.K;                  /* 只跟水平面：跳跃不带动机位上下抖 */
+    var tz = (h.z - sp.z) * CameraRig.K;
+    var o = CameraRig._off[k];
+    var a = 1 - Math.exp(-CameraRig.RATE * dt);
+    o.x += (tx - o.x) * a; o.z += (tz - o.z) * a;
+    S.camera.position.set(base.x + o.x, base.y, base.z + o.z);
+    S.camera.lookAt(look.x + o.x, look.y, look.z + o.z);
   }
 };
 
@@ -2973,6 +3062,7 @@ var M1 = {
   enter: function(k){
     GameState.reset(k);
     PlayerController.reset();
+    CameraRig.reset(k);
     var S = SCN[k], sd = (S && S.scene) ? S.scene.userData : null;
     if (sd && sd.gems){
       for (var i = 0; i < sd.gems.length; i++){
@@ -3020,6 +3110,7 @@ function boot(){
     }
   });
   setupCameras();
+  RENDER_ORDER.forEach(function(k){ CameraRig.init(k); });   /* M2：记录各关基准机位与出生点 */
   scenesReady = true;
   if (!SCN[cur]) cur = 'home';
   setScene(cur);
@@ -3068,7 +3159,8 @@ window.__info = function(){
   out.m1 = { mode: PlayerController.mode(cur), portal: GameState.portal, gems: GameState.get('gems'),
              tasks: _t, beat: +BeatClock.phase.toFixed(3), inWin: BeatClock.inWindow(),
              heroX: SCN[cur] && SCN[cur].hero ? +SCN[cur].hero.position.x.toFixed(3) : null,
-             heroZ: SCN[cur] && SCN[cur].hero ? +SCN[cur].hero.position.z.toFixed(3) : null };
+             heroZ: SCN[cur] && SCN[cur].hero ? +SCN[cur].hero.position.z.toFixed(3) : null,
+             camOff: CameraRig.off(cur) };
   return out;
 };
 boot();
