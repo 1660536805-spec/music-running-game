@@ -78,13 +78,7 @@
   .res i em{width:calc(20*var(--px));height:calc(20*var(--px));border-radius:calc(6*var(--px));
     transform:rotate(45deg);display:block}
 
-  /* ---------- 摇杆 / 圆钮 ---------- */
-  .stick{left:calc(120*var(--px));bottom:calc(90*var(--px));width:calc(170*var(--px));height:calc(170*var(--px));
-    border-radius:50%;border:calc(3*var(--px)) solid rgba(255,255,255,.34);
-    background:rgba(255,255,255,.10);backdrop-filter:blur(6px)}
-  .stick:after{content:"";position:absolute;left:50%;top:50%;
-    width:calc(44*var(--px));height:calc(44*var(--px));margin:calc(-22*var(--px)) 0 0 calc(-22*var(--px));
-    border-radius:50%;background:rgba(255,255,255,.60)}
+  /* ---------- 圆钮（M3-OP：虚拟摇杆 .stick 已移除，换道改由半区轻点/← →）---------- */
   .rbtns{right:calc(150*var(--px));bottom:calc(56*var(--px));display:flex;align-items:center;gap:calc(24*var(--px))}
   .rbtns b{width:calc(76*var(--px));height:calc(76*var(--px));border-radius:50%;
     border:calc(2.5*var(--px)) solid rgba(255,255,255,.34);background:rgba(255,255,255,.13);
@@ -2290,7 +2284,6 @@ function musicCard(song, elapsed, total){
     '<div class="wave">' + waveHTML(song.wave, 24) + '</div>' +
     '<div class="time">' + elapsed + ' / ' + total + '</div></div></div>';
 }
-function joystick(){ return '<div class="hud stick"></div>'; }
 /* §0.4-2/-3：跑/♪/跳 与 独立跑钮 各自带动作标记，交 Input 分流（不再一律 doJump） */
 function rbtns(){ return '<div class="hud rbtns"><b data-act="run">跑</b><b class="big" data-act="beat">♪</b><b data-act="jump">跳</b></div>'; }
 /* 参考图沙漠右缘中部的独立跑步圆钮 */
@@ -2312,10 +2305,10 @@ var HUD_DEF = {
       '<button data-go="home"><span class="ic">▣</span>星球图鉴</button>' +
       '<button data-go="home"><span class="ic">⚙</span>设置</button></div></div>';
   },
-  desert: function(){ return musicCard(SONGS.sunny, '01:24', '04:29') + taskCard() + joystick() + runBtn() + rbtns(); },
+  desert: function(){ return musicCard(SONGS.sunny, '01:24', '04:29') + taskCard() + runBtn() + rbtns(); },
   cave: function(){
     return musicCard(SONGS.nocturne, '02:08', '03:46') + taskCard() +
-      '<div class="hud glass prompt"><kbd>空格</kbd>跳跃 · <kbd>F</kbd>交互 <em>◆</em></div>' + sideBtns() + joystick();
+      '<div class="hud glass prompt"><kbd>← →</kbd>换道 · <kbd>空格</kbd>跳跃 · <kbd>F</kbd>交互 <em>◆</em></div>' + sideBtns();
   },
   base: function(){ return musicCard(SONGS.rice, '00:36', '03:43') + resBar() + minimap(); }
 };
@@ -2356,28 +2349,7 @@ function buildHUD(){
     el.addEventListener('pointerleave', releaseRun);
     el.addEventListener('pointercancel', releaseRun);
   });
-  /* 虚拟摇杆 → 移动轴向（GDD §5.1） */
-  Array.prototype.forEach.call(host.querySelectorAll('.stick'), function(el){
-    el.style.pointerEvents = 'auto';
-    var pid = null;
-    function setFrom(ev){
-      var r = el.getBoundingClientRect();
-      var dx = (ev.clientX - (r.left + r.width/2)) / (r.width/2);
-      var dy = (ev.clientY - (r.top + r.height/2)) / (r.height/2);
-      var m = Math.max(1, Math.sqrt(dx*dx + dy*dy));
-      Input.stick.x = dx/m; Input.stick.z = dy/m;
-    }
-    el.addEventListener('pointerdown', function(e){
-      e.stopPropagation(); pid = e.pointerId;
-      try { el.setPointerCapture(pid); } catch(_e){}
-      initAudio(); if (actx && actx.state === 'suspended') actx.resume();
-      setFrom(e);
-    });
-    el.addEventListener('pointermove', function(e){ if (pid === e.pointerId) setFrom(e); });
-    function end(e){ if (pid === e.pointerId || pid === null){ pid = null; Input.stick.x = 0; Input.stick.z = 0; } }
-    el.addEventListener('pointerup', end);
-    el.addEventListener('pointercancel', end);
-  });
+  /* M3-OP：虚拟摇杆已移除 → 左右换道改由「屏幕半区轻点 / ← → 键」承担（见下方指针监听） */
 }
 
 /* ==========================================================================
@@ -2448,9 +2420,23 @@ function scheduleAudio(){
   }
 }
 /* §7.5-1：键盘统一汇入 Input.keys；跳跃保持 空格/↑；F 改绑为交互/收集（§0.4-1） */
+/* ---- M3-OP 指针输入：屏幕左右半区轻点 → 换道（替代虚拟摇杆；主通道，1 帧内响应）----
+   跳/跑仍由屏幕按钮与键盘承担；半区轻点在 pointerdown 即时触发（零手势识别），
+   故"水平滑动"天然等价于首帧轻点，无需独立识别，也不会双触发。 */
+renderer.domElement.addEventListener('pointerdown', function(e){
+  initAudio(); if (actx && actx.state === 'suspended') actx.resume();
+  var S = SCN[cur];
+  if (!S || !S.runnable) return;                 /* 仅可玩关响应换道 */
+  Lane.request(e.clientX < innerWidth / 2 ? -1 : 1, cur);
+});
 addEventListener('keydown', function(e){
   Input.keys[e.code] = true;
   if (e.code === 'Space' || e.code === 'ArrowUp'){ e.preventDefault(); doJump(); }
+  /* M3-OP：键盘换道（← → / A D）；长按不重复触发（e.repeat 守卫） */
+  if (!e.repeat){
+    if (e.code === 'ArrowLeft'  || e.code === 'KeyA'){ e.preventDefault(); Lane.request(-1, cur); }
+    if (e.code === 'ArrowRight' || e.code === 'KeyD'){ e.preventDefault(); Lane.request( 1, cur); }
+  }
   if (e.key === '1') setScene('home');
   if (e.key === '2') setScene('desert');
   if (e.key === '3') setScene('cave');
@@ -2458,10 +2444,7 @@ addEventListener('keydown', function(e){
   if (e.key === 'f' || e.key === 'F') M1.interact();
 });
 addEventListener('keyup', function(e){ Input.keys[e.code] = false; });
-addEventListener('blur', function(){ Input.keys = {}; Input.btn.sprint = false; Input.stick.x = 0; Input.stick.z = 0; });
-renderer.domElement.addEventListener('pointerdown', function(){
-  initAudio(); if (actx && actx.state === 'suspended') actx.resume(); doJump();
-});
+addEventListener('blur', function(){ Input.keys = {}; Input.btn.sprint = false; });
 
 /* ==========================================================================
    6. 主循环
@@ -2613,6 +2596,7 @@ function loop(now){
       if (!FREEZE){
         Input.poll();
         BeatClock.update(dt);
+        Lane.update(dt, cur);                      /* M3-OP：跑道换道插值（easeOutCubic） */
         PlayerController.update(dt, cur, SCN[cur]);
         Collectible.update(dt, cur, SCN[cur]);
         Portal.update(dt, cur, SCN[cur]);
@@ -2658,7 +2642,15 @@ var CFG = {
   W_BEAT: 0.09,                                 /* 拍点窗口（占单拍比例）*/
   R_COLLECT: 2.5, R_PORTAL: 3.0,                /* 吸附 / 传送判定半径 */
   ACC: 0.12, DEC: 0.10, FADE: 0.35,             /* 起停缓动 / 白闪时长 */
-  X_MIN: -7.0, X_MAX: 7.0, Z_MIN: -24.0, Z_MAX: 1.0   /* 浅纵深轻量关可玩带 */
+  X_MIN: -7.0, X_MAX: 7.0, Z_MIN: -24.0, Z_MAX: 1.0,  /* 浅纵深轻量关可玩带（旧：自由移动用，保留） */
+  /* ---- M3-OP · 跑道切换（见 docs/声浪星球-跑道切换控制方案.md）----
+     自动前进 + 玩家仅左右换道；道宽由 band 宽度 / LANE_N 推导，保证音符落在某条道附近 */
+  LANE_N: 5,            /* 跑道数（Normal/Hard） */
+  SWITCH_DUR: 0.11,     /* 换道插值时长 (s)：须 < 最快音符间隔，见方案 §3.1 */
+  ROLL_MAX: 14,         /* 换道最大侧倾 (deg) */
+  BUFFER_T: 0.22,       /* 输入缓冲有效期 (s)：动画中按下 → 排队 1 次 */
+  BUMP_T: 0.12,         /* 越界"软墙"回弹时长 (s) */
+  BUMP_G: 0.35          /* 越界衰减位移（占 1 道比例） */
 };
 
 /* ---- 曲库（GDD §3.6）---- */
@@ -2687,6 +2679,76 @@ var LEVELS = {
             tasks: [ { id: 'gems',   label: '收集 3 个音乐晶体', need: 3 },
                      { id: 'portal', label: '激活传送装置',     need: 1 } ] },
   base:   { song: 'rice',     spawn: null, tasks: [] }
+};
+
+/* ---- M3-OP · 跑道（GDD/控制方案 §2/§3）------------------------------------
+   自动前进，玩家只做左右换道。车道为离散整数坐标 idx；换道即一次"击打"，
+   落在拍点上是 Perfect（判定由 M3-A Judge 消费，本模块只负责位移与手感）。
+   设计约束：
+     · 一次输入仅跨 1 道（保"1 输入 = 1 击打"的判定语义，防瞬移穿模）；
+     · 无硬冷却 → 用 SWITCH_DUR 动画天然限流 + 输入缓冲 1 次；
+     · 越界给"软墙"反馈（衰减位移 + 挤压），不断连击、不扣分；
+     · 道宽 = band 宽 / LANE_N ⇒ 关卡内所有音符必然落在某条道的吸附半径内；
+     · FREEZE（截图门禁）下不写入 hero.position.x ⇒ 定帧 heroC 逐位不变。 */
+var Lane = {
+  idx: 0, target: 0, from: 0, t: 1, roll: 0, buf: 0, bufT: 0, _bump: 0, bumpBase: 0, bumpDir: 0,
+  laneN: function(k){ var lv = LEVELS[k]; return (lv && lv.laneN) ? lv.laneN : CFG.LANE_N; },
+  laneW: function(k){ var lv = LEVELS[k];
+    return (lv && lv.band) ? (lv.band[1] - lv.band[0]) / Lane.laneN(k) : 2.2; },
+  /* 连续车道坐标 → 世界 x（idx 为整数时落在道中心） */
+  xAt: function(k, idx){ var lv = LEVELS[k]; if (!lv || !lv.band) return 0;
+    return lv.band[0] + (idx + 0.5) * Lane.laneW(k); },
+  reset: function(k, snap){
+    var lv = LEVELS[k], S = SCN[k];
+    var sx = (S && S.hero && S.hero.home) ? S.hero.home.x : 0;
+    var cont = (lv && lv.band) ? ((sx - lv.band[0]) / Lane.laneW(k) - 0.5) : 0;
+    if (snap){
+      /* 实玩时吸附到最近道中心；FREEZE 下保持连续值（= 出生点 x）⇒ 定帧逐位不变 */
+      Lane.idx = clamp(Math.round(cont), 0, Lane.laneN(k) - 1);
+      if (S && S.hero) S.hero.position.x = Lane.xAt(k, Lane.idx);
+      Lane.target = Lane.idx; Lane.from = Lane.idx;
+    } else {
+      Lane.idx = cont; Lane.target = cont; Lane.from = cont;
+    }
+    Lane.t = 1; Lane.roll = 0; Lane.buf = 0; Lane.bufT = 0; Lane._bump = 0;
+  },
+  request: function(dir, k){
+    var lv = LEVELS[k]; if (!lv || !lv.band) return false;
+    if (Lane._bump > 0) return false;                        /* 软墙回弹中忽略 */
+    if (Lane.t < 1){ Lane.buf = dir; Lane.bufT = CFG.BUFFER_T; return false; }   /* 动画中 → 缓冲 1 次 */
+    var base = Math.round(Lane.idx);
+    var nt = base + dir;
+    if (nt < 0 || nt > Lane.laneN(k) - 1){                   /* 越界"软墙" */
+      Lane.bumpBase = base; Lane.bumpDir = dir; Lane._bump = CFG.BUMP_T;
+      return false;
+    }
+    Lane.from = Lane.idx; Lane.target = nt; Lane.t = 0;
+    return true;
+  },
+  update: function(dt, k){
+    if (dt <= 0) return;
+    if (Lane.bufT > 0){ Lane.bufT = Math.max(0, Lane.bufT - dt); if (Lane.bufT === 0) Lane.buf = 0; }
+    if (Lane._bump > 0){                                     /* 越界软墙：衰减位移 + 回弹 */
+      Lane._bump = Math.max(0, Lane._bump - dt);
+      var bp = Lane._bump / CFG.BUMP_T;
+      Lane.idx = Lane.bumpBase + Lane.bumpDir * CFG.BUMP_G * bp;
+      Lane.roll = Lane.bumpDir * CFG.ROLL_MAX * 0.35 * bp;
+      if (Lane._bump === 0){ Lane.idx = Lane.bumpBase; Lane.target = Lane.bumpBase; Lane.from = Lane.bumpBase; Lane.roll = 0; }
+      return;
+    }
+    if (Lane.t < 1){                                         /* 换道插值（easeOutCubic） */
+      Lane.t = Math.min(1, Lane.t + dt / CFG.SWITCH_DUR);
+      var e = 1 - Math.pow(1 - Lane.t, 3);
+      Lane.idx = Lane.from + (Lane.target - Lane.from) * e;
+      Lane.roll = (Lane.target - Lane.from) * CFG.ROLL_MAX * (1 - e);
+      if (Lane.t >= 1){
+        Lane.idx = Lane.target; Lane.roll = 0;
+        if (Lane.buf){ var d = Lane.buf; Lane.buf = 0; Lane.bufT = 0; Lane.request(d, k); }
+      }
+    }
+  },
+  info: function(){ return { lane: Math.round(Lane.idx), idx: +Lane.idx.toFixed(3), target: +(+Lane.target).toFixed(3),
+    roll: +Lane.roll.toFixed(2), buf: Lane.buf, t: +Lane.t.toFixed(3), bump: +Lane._bump.toFixed(3) }; }
 };
 
 /* ---- 轻量事件总线（GDD §6.5）---- */
@@ -2719,7 +2781,7 @@ var GameState = {
 
 /* ---- 输入抽象（GDD §5.1 / §6.8）——键盘在既有 keydown 处接线 ---- */
 var Input = {
-  enabled: true, keys: {}, stick: { x: 0, z: 0 }, move: { x: 0, z: 0 },
+  enabled: true, keys: {}, move: { x: 0, z: 0 },   /* M3-OP：虚拟摇杆已移除，stick 字段删除 */
   sprint: false, btn: { sprint: false },
   poll: function(){
     var k = Input.keys, mx = 0, mz = 0;
@@ -2729,7 +2791,6 @@ var Input = {
       if (k['KeyA']) mx -= 1;
       if (k['KeyD']) mx += 1;
     }
-    mx += Input.stick.x; mz += Input.stick.z;
     var l = Math.sqrt(mx*mx + mz*mz);
     if (l > 1){ mx /= l; mz /= l; }
     Input.move.x = mx; Input.move.z = mz;
@@ -2962,41 +3023,39 @@ var Portal = {
   }
 };
 
-/* ---- 角色位移 + 贴地（GDD §3.1 / §7.5-2；红线：只改 x/z，y 交给 poseHero）---- */
+/* ---- 角色位移 + 贴地（GDD §3.1；M3-OP：自动前进 + 跑道换道）------------------
+   红线：只改 x/z，y 交给 poseHero；FREEZE（截图门禁）下本函数整体不执行 ⇒ 定帧零漂移。 */
 var PlayerController = {
-  vx: 0, vz: 0, moved: false,
-  reset: function(){ PlayerController.vx = 0; PlayerController.vz = 0; PlayerController.moved = false; },
+  vx: 0, vz: 0, moved: false, stopped: false,
+  reset: function(){ PlayerController.vx = 0; PlayerController.vz = 0;
+    PlayerController.moved = false; PlayerController.stopped = false; },
   mode: function(k){ return (LEVELS[k] && LEVELS[k].band) ? 'run' : 'idle'; },
   update: function(dt, k, S){
     var lv = LEVELS[k];
-    if (dt <= 0 || !lv || !lv.band) return;                /* M2：desert / cave 均可自由移动 */
+    if (dt <= 0 || !lv || !lv.band) return;                /* M2：desert / cave 均可移动 */
     if (!S || !S.runnable || !S.hero || !S.scene || !S.scene.userData.ground) return;
     var ground = S.scene.userData.ground;
-    var mx = Input.move.x, mz = Input.move.z, l = Math.sqrt(mx*mx + mz*mz);
-    var sp = Input.sprint ? CFG.SPEED_F*CFG.SPRINT : CFG.SPEED_F;
-    var tvx = 0, tvz = 0;
-    if (l > 0){ mx /= l; mz /= l; tvx = mx*sp; tvz = mz*sp; }
-    var kk = 1 - Math.exp(-(l > 0 ? 1/CFG.ACC : 1/CFG.DEC) * dt);
-    PlayerController.vx += (tvx - PlayerController.vx) * kk;
-    PlayerController.vz += (tvz - PlayerController.vz) * kk;
-    /* 静止零写入：从未移动且无输入 ⇒ 立即返回，保证形变/位移零发生 */
-    if (!PlayerController.moved && l === 0 &&
-        Math.abs(PlayerController.vx) < 1e-4 && Math.abs(PlayerController.vz) < 1e-4) return;
     var h = S.hero;
-    h.position.x = clamp(h.position.x + PlayerController.vx*dt, lv.band[0], lv.band[1]);
-    h.position.z = clamp(h.position.z + PlayerController.vz*dt, lv.band[2], lv.band[3]);
-    if (l > 0) h.rotation.y = Math.atan2(-mx, -mz);        /* 模型默认正面 = −z */
+    /* ① 自动前进：沿 −z 恒定速度；抵达 band 末端后钳制（关卡段终点） */
+    var nz = h.position.z - CFG.SPEED_F * dt;
+    if (nz <= lv.band[2]){ nz = lv.band[2]; PlayerController.stopped = true; }
+    h.position.z = nz;
+    /* ② 横向：完全由 Lane 车道插值决定（玩家唯一输入 = 左/右换道） */
+    h.position.x = clamp(Lane.xAt(k, Lane.idx), lv.band[0], lv.band[1]);
+    /* ③ 朝向：跑动方向 = −z（模型默认正面 −z） */
+    h.rotation.y = 0;
+    /* ④ 换道侧倾 roll：无换道时恒为 0 ⇒ 与定帧基准等价 */
+    h.rotation.z = Math.abs(Lane.roll) > 0.001 ? D2R(-Lane.roll) : 0;
     h.userData.baseY = ground(h.position.x, h.position.z);
     PlayerController.moved = true;
   }
 };
 
-/* ---- 相机装置 · 方案 B 微跟随（GDD §3.9 / §7.2 M2；Q: 第一关也跟随）
-   以定帧机位 CAM[k] 为基准，按 K·(hero − 出生点) 做 x/z **纯平移**跟随
-   （相机与注视点同量平移、朝向不变 ⇒ 望远镜式推近，只改取景范围不改朝向）；
-   位移经指数平滑（滞后感即"微"）。出生点位移为 0 ⇒ 相机与定帧逐位一致，
-   故"静止于出生点"时 heroC 仍零漂移；FREEZE（截图门禁）下整段不执行。
-   仅对可玩关（存在 LEVELS[k].band）生效；home/base 保持固定机位。 */
+/* ---- 相机装置 · 跑道式跟随（GDD §3.9 / §7.2 M2 → M3-OP 改造）
+   以定帧机位 CAM[k] 为基准，**只沿 z 做刚性平移**（相机与注视点同量平移、朝向不变）：
+   角色屏幕位置恒定、世界向后流过 ⇒ 跑酷推进感；x / y / pitch / fov 全部锁死为定帧基准
+   ⇒ 换道不甩镜（防晕）。出生点 dz = 0 ⇒ 相机与定帧逐位一致 ⇒ 定帧 heroC 零漂移；
+   FREEZE（截图门禁）下整段不执行。仅对可玩关（存在 LEVELS[k].band）生效。 */
 var CameraRig = {
   K: 0.8, RATE: 5.0,
   _base: {}, _look: {}, _off: {}, _spawn: {},
@@ -3021,14 +3080,12 @@ var CameraRig = {
     var lv = LEVELS[k]; if (!lv || !lv.band) return;      /* 仅可玩关跟随 */
     var S = SCN[k], base = CameraRig._base[k], look = CameraRig._look[k], sp = CameraRig._spawn[k];
     if (!S || !S.camera || !S.hero || !base || !sp) return;
-    var h = S.hero.position;
-    var tx = (h.x - sp.x) * CameraRig.K;                  /* 只跟水平面：跳跃不带动机位上下抖 */
-    var tz = (h.z - sp.z) * CameraRig.K;
+    /* 只跟 z（刚性、无平滑）：角色屏幕位置恒定；x 锁死 ⇒ 换道不甩镜 */
+    var dz = S.hero.position.z - sp.z;
     var o = CameraRig._off[k];
-    var a = 1 - Math.exp(-CameraRig.RATE * dt);
-    o.x += (tx - o.x) * a; o.z += (tz - o.z) * a;
-    S.camera.position.set(base.x + o.x, base.y, base.z + o.z);
-    S.camera.lookAt(look.x + o.x, look.y, look.z + o.z);
+    if (o){ o.x = 0; o.z = dz; }
+    S.camera.position.set(base.x, base.y, base.z + dz);
+    S.camera.lookAt(look.x, look.y, look.z + dz);
   }
 };
 
@@ -3063,6 +3120,7 @@ var M1 = {
     GameState.reset(k);
     PlayerController.reset();
     CameraRig.reset(k);
+    Lane.reset(k, !FREEZE);          /* M3-OP：吸附到最近道；FREEZE 下保持连续值 ⇒ 定帧不变 */
     var S = SCN[k], sd = (S && S.scene) ? S.scene.userData : null;
     if (sd && sd.gems){
       for (var i = 0; i < sd.gems.length; i++){
@@ -3160,7 +3218,8 @@ window.__info = function(){
              tasks: _t, beat: +BeatClock.phase.toFixed(3), inWin: BeatClock.inWindow(),
              heroX: SCN[cur] && SCN[cur].hero ? +SCN[cur].hero.position.x.toFixed(3) : null,
              heroZ: SCN[cur] && SCN[cur].hero ? +SCN[cur].hero.position.z.toFixed(3) : null,
-             camOff: CameraRig.off(cur) };
+             camOff: CameraRig.off(cur),
+             lane: Lane.info(), stopped: PlayerController.stopped, autoSpeed: CFG.SPEED_F };
   return out;
 };
 boot();
