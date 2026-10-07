@@ -1189,7 +1189,11 @@ var CAM = {
   home:   { fov: 50, pos: [0, 2.60, 13.0], pitch: 10, yaw: 0 },
   desert: { fov: 60, pos: [0.6, 5.00, 11.4], pitch: 7.1, yaw: 0 },
   cave:   { fov: 58, pos: [1.2, 4.75, 8.0], pitch: -3.5, yaw: 0 },
-  base:   { fov: 50, pos: [2.0, 6.40, 12.0], pitch: -8, yaw: 0 }
+  base:   { fov: 50, pos: [2.0, 6.40, 12.0], pitch: -8, yaw: 0 },
+  /* M3-CW ·《超频长阶》追尾镜头的"静止形态"：运行时由 Lens（P4）逐帧覆盖 x/y/pitch/fov。
+     机位基准与英雄出生点（z=4.0）相距 4.2 ⇒ 与四场景一致的画面占比（heroC≈0.5/0.72）。
+     仍提供一份基准，使 FREEZE 定帧与非玩法态下机位确定、可复现。 */
+  causeway: { fov: 70, pos: [0, 1.55, 8.9], pitch: -4, yaw: 0 }
 };
 function camVectors(c){
   var p = new THREE.Vector3(c.pos[0], c.pos[1], c.pos[2]);
@@ -1198,6 +1202,9 @@ function camVectors(c){
   return { pos: p, look: p.clone().add(dir.multiplyScalar(200)), dir: dir };
 }
 var RENDER_ORDER = ['home','desert','cave','base'];
+/* M3-CW：causeway 是独立单赛道关，**不进 RENDER_ORDER**（保 showcase 2×2 与四场景定帧门禁），
+   仅加入"全集"供相机建立 / 定标记录 / __info 遍历使用（共 5 处遍历改用 SCENES_ALL）。 */
+var SCENES_ALL = RENDER_ORDER.concat(['causeway']);
 
 /* ================================================================ HOME ==== */
 function buildHome(){
@@ -2245,6 +2252,135 @@ function buildBase(){
   return { scene: S, hero: hero, runnable: false };
 }
 
+/* ============================================================ CAUSEWAY ==== */
+/* M3-CW ·《超频长阶》单赛道关（Overdrive Causeway）
+   -----------------------------------------------------------------------------
+   ▸ 与既有 4 场景**完全隔离**：不进 RENDER_ORDER（保 showcase 2×2 与四场景定帧门禁）；
+     所有随机外观走 dseq 独立流（遵守 R2，不消耗全局 rnd/rr/ri/pick）；
+     不开阴影贴图（英雄自带 blobShadow 伪影、随体移动，无需 1280m 阴影相机）。
+   ▸ 赛道：宽 3.5m；双层 lo(贴地 y=0) / hi(悬浮 y=+0.9)；一次构建长几何、座位固定。
+   ▸ 升降层**不写 hero.position.y**：让 scene.userData.ground 把层高算进 baseY，
+     由既有 PlayerController(写 baseY) → poseHero(写 position.y) 链路自动生效。 */
+var CW = {
+  W: 3.5, FLOOR: 0, LAYER_HI: 0.9,
+  Z_START: 4.0, Z_END: -1260.0, LEN: 1284,
+  BASE: 11, SPRINT: 15, SPRINT_AT: 0.85,
+  SWITCH_MS: 90, PITCH_MAX: 12, BUMP_DEG: 6,
+  LO: 0x18E0FF, HI: 0xFF4FD8, ACC: 0x8CFFC8
+};
+/* 赛道贴图：暗底 + 霓虹网格 + 中央导引带（canvas 现画，遵守"禁 PBR/照片纹理"规范） */
+var _cwTexCache = {};
+function cwTex(kind){
+  if (_cwTexCache[kind]) return _cwTexCache[kind];
+  var S = 256, cv = document.createElement('canvas'); cv.width = S; cv.height = S;
+  var g = cv.getContext('2d');
+  g.fillStyle = (kind === 'hi') ? '#2A1550' : '#0E1A2E'; g.fillRect(0, 0, S, S);
+  var edge = (kind === 'hi') ? 'rgba(255,79,216,' : 'rgba(24,224,255,';
+  g.strokeStyle = edge + '0.34)'; g.lineWidth = 3;
+  for (var i = 0; i <= 4; i++){ var p = i * S / 4; g.beginPath(); g.moveTo(0, p); g.lineTo(S, p); g.stroke(); }
+  g.strokeStyle = edge + '0.16)'; g.lineWidth = 2;
+  for (var j = 0; j <= 4; j++){ var q = j * S / 4; g.beginPath(); g.moveTo(q, 0); g.lineTo(q, S); g.stroke(); }
+  var lg = g.createLinearGradient(0, 0, S, 0);
+  lg.addColorStop(0.00, 'rgba(140,255,200,0)'); lg.addColorStop(0.42, 'rgba(140,255,200,0.14)');
+  lg.addColorStop(0.50, 'rgba(210,255,240,0.36)'); lg.addColorStop(0.58, 'rgba(140,255,200,0.14)');
+  lg.addColorStop(1.00, 'rgba(140,255,200,0)');
+  g.fillStyle = lg; g.fillRect(0, 0, S, S);
+  var t = new THREE.CanvasTexture(cv);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, 64); t.needsUpdate = true;
+  _cwTexCache[kind] = t; return t;
+}
+function buildCauseway(){
+  var S = new THREE.Scene();
+  S.background = new THREE.Color(0x060912);
+  S.fog = new THREE.Fog(0x0A1024, 70, 430);
+  S.add(makeSky(0x14204E, 0x3A2060, 0x0A0718));
+  S.add(new THREE.HemisphereLight(0xA8C0FF, 0x1A1030, 0.62));
+  var key = new THREE.DirectionalLight(0xEAF2FF, 0.85); key.position.set(-26, 64, 34); S.add(key);
+  var rim = new THREE.DirectionalLight(0xFF4FD8, 0.50); rim.position.set(32, 16, -46); S.add(rim);
+
+  var midZ = CW.Z_START - CW.LEN / 2;
+
+  /* 深层底面：给"悬空长阶"以纵深参照 */
+  add(S, new THREE.PlaneGeometry(CW.W * 40, CW.LEN), basic(0x05070E, { fog: true }),
+      0, -7.5, midZ, { cast: false, recv: false, rot: [-Math.PI / 2, 0, 0] });
+
+  /* Lo 贴地面 / Hi 悬浮面（同一长几何，纹理沿 z 重复 64 次） */
+  var loMat = basic(0xFFFFFF, { fog: true }); loMat.map = cwTex('lo');
+  add(S, new THREE.PlaneGeometry(CW.W, CW.LEN), loMat, 0, CW.FLOOR, midZ,
+      { cast: false, recv: false, rot: [-Math.PI / 2, 0, 0] });
+  var hiMat = basic(0xFFFFFF, { transparent: true, opacity: 0.78, fog: true }); hiMat.map = cwTex('hi');
+  add(S, new THREE.PlaneGeometry(CW.W - 0.5, CW.LEN), hiMat, 0, CW.LAYER_HI, midZ,
+      { cast: false, recv: false, rot: [-Math.PI / 2, 0, 0] });
+
+  /* Hi 层支撑柱（InstancedMesh ⇒ 1 次 draw call） */
+  var pN = Math.floor(CW.LEN / 24) + 1;
+  var pillars = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(0.13, CW.LAYER_HI, 0.13),
+    M(0x2A3350, { emissive: 0x0B1830, ei: 1 }), pN * 2);
+  var _m4 = new THREE.Matrix4();
+  for (var pi = 0; pi < pN; pi++){
+    var pz = CW.Z_START - pi * 24;
+    _m4.makeTranslation(-1.55, CW.LAYER_HI / 2, pz); pillars.setMatrixAt(pi * 2, _m4);
+    _m4.makeTranslation( 1.55, CW.LAYER_HI / 2, pz); pillars.setMatrixAt(pi * 2 + 1, _m4);
+  }
+  pillars.instanceMatrix.needsUpdate = true; pillars.castShadow = false; pillars.receiveShadow = false;
+  S.add(pillars);
+
+  /* 两侧边缘发光导轨（每层两条长条；additive + 无雾 ⇒ 霓虹感） */
+  function rail(y, x, col, op){
+    return add(S, new THREE.BoxGeometry(0.10, 0.10, CW.LEN),
+      basic(col, { transparent: true, opacity: op, additive: true, fog: false, depthWrite: false }),
+      x, y, midZ, { cast: false, recv: false });
+  }
+  rail(CW.FLOOR + 0.05, -CW.W / 2, CW.LO, 0.85);            rail(CW.FLOOR + 0.05, CW.W / 2, CW.LO, 0.85);
+  rail(CW.LAYER_HI + 0.05, -(CW.W - 0.5) / 2, CW.HI, 0.72); rail(CW.LAYER_HI + 0.05, (CW.W - 0.5) / 2, CW.HI, 0.72);
+
+  /* 远景霓虹柱林：dseq 独立流（R2），双侧交错，提供速度参照 */
+  var Rs = dseq(0xC0A5E7), cols = [CW.LO, CW.HI, CW.ACC];
+  var monoGeo = new THREE.BoxGeometry(1.1, 1, 1.1); monoGeo.translate(0, 0.5, 0);
+  for (var si = 0; si < 44; si++){
+    var mside = (si % 2) ? 1 : -1, mcol = cols[(Rs() * 3) | 0];
+    var mo = add(S, monoGeo, M(0x141B2E, { emissive: shade(mcol, 0.22), ei: 1 }),
+      mside * (6 + Rs() * 22), -7.5, CW.Z_START - 10 - Rs() * (CW.LEN - 40),
+      { cast: false, recv: false, scale: [0.6 + Rs() * 1.4, 6 + Rs() * 26, 0.6 + Rs() * 1.4] });
+    mo.rotation.y = Rs() * 3.14;
+  }
+
+  /* 近处悬浮碎晶：贴赛道两侧掠过，强化"速度感"（每帧在 updateScene 里自转+浮动） */
+  var shards = [], shardGeo = new THREE.IcosahedronGeometry(0.5, 0);
+  for (var qi = 0; qi < 44; qi++){
+    var qside = (qi % 2) ? 1 : -1, qcol = cols[(Rs() * 3) | 0];
+    var qm = add(S, shardGeo,
+      basic(qcol, { transparent: true, opacity: 0.52, additive: true, fog: false, depthWrite: false }),
+      qside * (3.0 + Rs() * 4.5), 1.2 + Rs() * 6.5, CW.Z_START - Rs() * (CW.LEN - 20),
+      { cast: false, recv: false, scale: [0.5 + Rs() * 1.6, 0.5 + Rs() * 1.6, 0.5 + Rs() * 1.6] });
+    qm.userData.spin = 0.4 + Rs() * 1.6; qm.userData.ph = Rs() * 6.283; qm.userData.y0 = qm.position.y;
+    shards.push(qm);
+  }
+  S.userData.shards = shards;
+
+  /* 星尘（复用 motes：1 次 draw call） */
+  var mtC1 = motes({ n: 150, color: 0xBFE8FF, w: 46, y0: 1, y1: 26, z0: 2, z1: 120, size: 0.26, opacity: 0.62 });
+  var mtC2 = motes({ n: 70, color: 0xFF9CE8, w: 70, y0: 6, y1: 34, z0: 60, z1: 220, size: 0.40, opacity: 0.42 });
+  S.add(mtC1); S.add(mtC2); S.userData.motes = [mtC1, mtC2];
+
+  /* 英雄：3.5m 窄赛道上取 0.70 缩放（身高≈1.9u），与赛道宽相称、且追尾机位占比与四场景一致 */
+  var hero = createDragonAstronaut();
+  hero.scale.setScalar(0.70);
+  hero.userData.baseY = CW.FLOOR;
+  hero.position.set(0, CW.FLOOR, CW.Z_START);
+  hero.rotation.y = 0;
+  S.add(hero);
+
+  /* 贴地函数 = 层高注入点：Track.layerY(0↔0.9) 直接进入 baseY ⇒ 升降层生效 */
+  S.userData.ground = function(x, z){ return CW.FLOOR + Track.layerY; };
+
+  /* 音游运行时挂载位（P2/P3 填充：谱面 / 障碍池 / 段落 / 镜头） */
+  S.userData.cw = { obstacles: [], active: [] };
+
+  return { scene: S, hero: hero, runnable: true };
+}
+
 /* ==========================================================================
    3. 渲染器
    ========================================================================== */
@@ -2258,7 +2394,7 @@ document.getElementById('stage').appendChild(renderer.domElement);
 var SCN = {}, scenesReady = false;
 function setupCameras(){
   var aspect = innerWidth / innerHeight;
-  RENDER_ORDER.forEach(function(k){
+  SCENES_ALL.forEach(function(k){
     var c = new THREE.PerspectiveCamera(CAM[k].fov, aspect, 0.1, 9000);
     var v = camVectors(CAM[k]);
     c.position.copy(v.pos); c.lookAt(v.look);
@@ -2301,6 +2437,7 @@ var HUD_DEF = {
   home: function(){
     return '<div class="hud title"><h1>声浪星球</h1><p>用音乐，探索更远的世界</p><div class="menu">' +
       '<button class="primary" data-go="desert"><span class="ic">▶</span>开始旅程</button>' +
+      '<button data-go="causeway"><span class="ic">⚡</span>超频长阶</button>' +
       '<button data-go="home"><span class="ic">♫</span>选择歌曲</button>' +
       '<button data-go="home"><span class="ic">▣</span>星球图鉴</button>' +
       '<button data-go="home"><span class="ic">⚙</span>设置</button></div></div>';
@@ -2310,7 +2447,12 @@ var HUD_DEF = {
     return musicCard(SONGS.nocturne, '02:08', '03:46') + taskCard() +
       '<div class="hud glass prompt"><kbd>← →</kbd>换道 · <kbd>空格</kbd>跳跃 · <kbd>F</kbd>交互 <em>◆</em></div>' + sideBtns();
   },
-  base: function(){ return musicCard(SONGS.rice, '00:36', '03:43') + resBar() + minimap(); }
+  base: function(){ return musicCard(SONGS.rice, '00:36', '03:43') + resBar() + minimap(); },
+  /* M3-CW ·《超频长阶》：单赛道操作提示（音游 HUD 由 RhythmHUD 惰性层承担，P3） */
+  causeway: function(){
+    return musicCard(SONGS.superweave, '00:00', '01:37') +
+      '<div class="hud glass prompt"><kbd>↑</kbd><kbd>W</kbd>升 · <kbd>↓</kbd><kbd>S</kbd>降 · 长按<kbd>空格</kbd>同调 <em>⚡</em></div>';
+  }
 };
 
 function buildHUD(){
@@ -2441,6 +2583,7 @@ addEventListener('keydown', function(e){
   if (e.key === '2') setScene('desert');
   if (e.key === '3') setScene('cave');
   if (e.key === '4') setScene('base');
+  if (e.key === '5') setScene('causeway');
   if (e.key === 'f' || e.key === 'F') M1.interact();
 });
 addEventListener('keyup', function(e){ Input.keys[e.code] = false; });
@@ -2550,6 +2693,13 @@ function updateScene(k, dt){
     }
     attr.needsUpdate = true;
   }
+  /* M3-CW：近处悬浮碎晶自转 + 上下浮动（仅 causeway 有该数组 ⇒ 其余场景零开销） */
+  var shards = sc.userData.shards;
+  if (shards) for (var shi = 0; shi < shards.length; shi++){
+    var so2 = shards[shi], ud = so2.userData;
+    so2.rotation.y += dt * ud.spin; so2.rotation.x += dt * ud.spin * 0.6;
+    so2.position.y = ud.y0 + Math.sin(T * 1.3 + ud.ph) * 0.9;
+  }
   if (S.hero){
     if (jump.on){
       jump.v -= CFG.G*dt; jump.y += jump.v*dt;
@@ -2565,6 +2715,12 @@ function updateScene(k, dt){
     }
     S.hero.position.y = S.hero.userData.baseY + jump.y;
     poseHero(S.hero, PlayerController.mode(k), T + (k === 'cave' ? 3.2 : 0), jump.y);
+    /* M3-CW：升降俯仰/越界侧倾必须在 poseHero **之后**叠加 ——
+       poseHero('run') 每帧会写 hero.rotation.x 与 rotation.z，先写会被覆盖。 */
+    if (k === 'causeway' && !FREEZE){
+      if (Track.pitch) S.hero.rotation.x += D2R(Track.pitch);
+      if (Track.roll)  S.hero.rotation.z += D2R(Track.roll);
+    }
     var sh = S.hero.userData.shadow;
     if (sh){ var kk = 1 - Math.min(0.6, jump.y*0.15); sh.scale.setScalar(kk); sh.material.opacity = kk; }
   }
@@ -2597,6 +2753,7 @@ function loop(now){
         Input.poll();
         BeatClock.update(dt);
         Lane.update(dt, cur);                      /* M3-OP：跑道换道插值（easeOutCubic） */
+        Track.update(dt, cur);                     /* M3-CW：单赛道升降层插值（causeway 专用） */
         PlayerController.update(dt, cur, SCN[cur]);
         Collectible.update(dt, cur, SCN[cur]);
         Portal.update(dt, cur, SCN[cur]);
@@ -2622,7 +2779,7 @@ addEventListener('resize', function(){
   renderer.setSize(innerWidth, innerHeight);
   if (!scenesReady) return;
   var aspect = innerWidth/innerHeight;
-  RENDER_ORDER.forEach(function(k){ SCN[k].camera.aspect = aspect; SCN[k].camera.updateProjectionMatrix(); });
+  SCENES_ALL.forEach(function(k){ SCN[k].camera.aspect = aspect; SCN[k].camera.updateProjectionMatrix(); });
   buildHUD();
 });
 
@@ -2657,7 +2814,9 @@ var CFG = {
 var SONGS = {
   sunny:    { name: '晴天', artist: '周杰伦', bpm: 118, total: '04:29', wave: 0.4 },
   nocturne: { name: '夜曲', artist: '周杰伦', bpm: 126, total: '03:46', wave: 2.1 },
-  rice:     { name: '稻香', artist: '周杰伦', bpm: 110, total: '03:43', wave: 4.7 }
+  rice:     { name: '稻香', artist: '周杰伦', bpm: 110, total: '03:43', wave: 4.7 },
+  /* M3-CW ·《超频长阶》内置合成曲（由 tools/gen_causeway.js 生成，真值谱面同源） */
+  superweave: { name: '超频长阶', artist: 'Soundwave Planet', bpm: 158, total: '01:37', wave: 7.3 }
 };
 
 /* ---- 关卡定义（GDD §4.2 / §4.6 / §4.7）----
@@ -2678,7 +2837,16 @@ var LEVELS = {
             band: [-14.0, 14.0, -44.0, 3.0], padR: 3.0, summitZ: null, next: 'base',
             tasks: [ { id: 'gems',   label: '收集 3 个音乐晶体', need: 3 },
                      { id: 'portal', label: '激活传送装置',     need: 1 } ] },
-  base:   { song: 'rice',     spawn: null, tasks: [] }
+  base:   { song: 'rice',     spawn: null, tasks: [] },
+  /* M3-CW ·《超频长阶》：单赛道关。
+     · 仍给 band —— PlayerController.update / CameraRig.update 均以 lv.band 为前置守卫，
+       不给 band 会连带失去"自动前进"；laneN:1 使 Lane.xAt(k,0) 恰为赛道中心 ⇒ x 锁定中心。
+     · 赛道宽 3.5m（xMin/xMax ±1.75）；终点 z = 谱面末障碍之后（Track.zEnd）。
+     · tasks 为空：本关由结算面板自管理（不走 TaskSystem）。 */
+  causeway: { song: 'superweave', mode: 'single-track', laneN: 1,
+              spawn: [0.0, 4.0], ground: 'cw', speed: 11,
+              band: [-1.75, 1.75, -1260.0, 4.0], padR: 0, summitZ: null, next: null,
+              tasks: [] }
 };
 
 /* ---- M3-OP · 跑道（GDD/控制方案 §2/§3）------------------------------------
@@ -2749,6 +2917,66 @@ var Lane = {
   },
   info: function(){ return { lane: Math.round(Lane.idx), idx: +Lane.idx.toFixed(3), target: +(+Lane.target).toFixed(3),
     roll: +Lane.roll.toFixed(2), buf: Lane.buf, t: +Lane.t.toFixed(3), bump: +Lane._bump.toFixed(3) }; }
+};
+
+/* ---- M3-CW · 单赛道升降层（Track）----------------------------------------
+   与 Lane 并列的第二套操作范式，**仅对 causeway（mode:'single-track'）生效**。
+   横向已由 laneN:1 锁死在赛道中心 ⇒ 玩家唯一输入 = 升(Lift→hi) / 降(Dive→lo)（+ P4 同调长按）。
+   设计约束（对齐 docs/声浪星球-关卡设计-超频长阶.md §3）：
+     · 层间切换 90ms easeOutCubic（快于换道 110ms，因整体节奏偏快）；
+     · **不写 hero.position.y** —— 只更新 Track.layerY，由 scene.userData.ground 注入 baseY；
+     · 越界（已在 Hi 再按升）= 软反馈（+6° 仰角 + 音），不断连击；
+     · 输入缓冲 1 次；
+     · FREEZE 下不更新（causeway 亦不在 RENDER_ORDER）⇒ 定帧零漂移，双保险。 */
+var Track = {
+  layer: 'lo', target: 'lo', t: 1, fromY: 0, toY: 0, layerY: 0,
+  pitch: 0, roll: 0, buf: 0, bufT: 0, bump: 0, bumpDir: 0, songT: 0,
+  isCw: function(k){ return !!(LEVELS[k] && LEVELS[k].mode === 'single-track'); },
+  reset: function(k){
+    Track.layer = 'lo'; Track.target = 'lo'; Track.t = 1;
+    Track.layerY = 0; Track.fromY = 0; Track.toY = 0;
+    Track.pitch = 0; Track.roll = 0; Track.buf = 0; Track.bufT = 0; Track.bump = 0; Track.songT = 0;
+  },
+  /* 升(+1) / 降(−1)：一次输入翻转一层；同层再按 ⇒ 越界软反馈，不算失败 */
+  request: function(dir, k){
+    var to = (dir > 0) ? 'hi' : 'lo';
+    if (Track.t < 1){ Track.buf = dir; Track.bufT = CFG.BUFFER_T; return false; }   /* 动画中缓冲 1 次 */
+    if (to === Track.target){ Track._bump(dir); return false; }
+    Track.fromY = Track.layerY; Track.toY = (to === 'hi') ? CW.LAYER_HI : 0;
+    Track.target = to; Track.t = 0;
+    Bus.emit('cw:layer', { to: to });
+    return true;
+  },
+  _bump: function(dir){
+    Track.bump = 0.16; Track.bumpDir = dir;
+    if (typeof m1Sfx === 'function') m1Sfx('uiClick');
+    Bus.emit('cw:bump', { dir: dir });
+  },
+  /* 前进速度：能量 ≥0.85 的段落自动冲刺（P2 接入 Chart.mood.energy；P1 固定基础速） */
+  speed: function(){
+    if (!Track.isCw(cur)) return CFG.SPEED_F;
+    return (Track.energy >= CW.SPRINT_AT) ? CW.SPRINT : CW.BASE;
+  },
+  energy: 0,                                  /* P2 起由 Chart 写入当前段落能量 */
+  update: function(dt, k){
+    if (dt <= 0 || !Track.isCw(k)) return;
+    if (Track.bufT > 0){ Track.bufT = Math.max(0, Track.bufT - dt); if (Track.bufT === 0) Track.buf = 0; }
+    if (Track.bump > 0) Track.bump = Math.max(0, Track.bump - dt);
+    if (Track.t < 1){
+      Track.t = Math.min(1, Track.t + dt / (CW.SWITCH_MS / 1000));
+      var e = 1 - Math.pow(1 - Track.t, 3);                     /* easeOutCubic */
+      Track.layerY = Track.fromY + (Track.toY - Track.fromY) * e;
+      Track.pitch = ((Track.toY > Track.fromY) ? 1 : -1) * CW.PITCH_MAX * (1 - e);  /* 升抬头 / 降俯冲 */
+      if (Track.t >= 1){
+        Track.layerY = Track.toY; Track.layer = Track.target; Track.pitch = 0;
+        if (Track.buf){ var d = Track.buf; Track.buf = 0; Track.bufT = 0; Track.request(d, k); }
+      }
+    } else { Track.pitch = 0; }
+    Track.roll = (Track.bump > 0) ? Track.bumpDir * CW.BUMP_DEG * (Track.bump / 0.16) : 0;
+  },
+  info: function(){ return { layer: Track.layer, target: Track.target, layerY: +Track.layerY.toFixed(3),
+    t: +Track.t.toFixed(3), pitch: +Track.pitch.toFixed(2), roll: +Track.roll.toFixed(2),
+    songT: +Track.songT.toFixed(3), energy: +Track.energy.toFixed(2) }; }
 };
 
 /* ---- 轻量事件总线（GDD §6.5）---- */
@@ -3036,8 +3264,10 @@ var PlayerController = {
     if (!S || !S.runnable || !S.hero || !S.scene || !S.scene.userData.ground) return;
     var ground = S.scene.userData.ground;
     var h = S.hero;
-    /* ① 自动前进：沿 −z 恒定速度；抵达 band 末端后钳制（关卡段终点） */
-    var nz = h.position.z - CFG.SPEED_F * dt;
+    /* ① 自动前进：沿 −z 恒定速度；抵达 band 末端后钳制（关卡段终点）
+       M3-CW：单赛道关（causeway）前进速度由 Track 提供（基础 11 / 冲刺 15），其余关沿用 CFG.SPEED_F */
+    var spd = (lv.mode === 'single-track') ? Track.speed() : CFG.SPEED_F;
+    var nz = h.position.z - spd * dt;
     if (nz <= lv.band[2]){ nz = lv.band[2]; PlayerController.stopped = true; }
     h.position.z = nz;
     /* ② 横向：完全由 Lane 车道插值决定（玩家唯一输入 = 左/右换道） */
@@ -3121,6 +3351,7 @@ var M1 = {
     PlayerController.reset();
     CameraRig.reset(k);
     Lane.reset(k, !FREEZE);          /* M3-OP：吸附到最近道；FREEZE 下保持连续值 ⇒ 定帧不变 */
+    Track.reset(k);                  /* M3-CW：回到 Lo 层、清空同调/缓冲/俯仰 */
     var S = SCN[k], sd = (S && S.scene) ? S.scene.userData : null;
     if (sd && sd.gems){
       for (var i = 0; i < sd.gems.length; i++){
@@ -3159,7 +3390,8 @@ function boot(){
   srand(0x51C7A3); SCN.desert = buildDesert();
   srand(0x9B31F7); SCN.cave   = buildCave();
   srand(0x77E2D9); SCN.base   = buildBase();
-  RENDER_ORDER.forEach(function(k){
+  srand(0xC0A5E7); SCN.causeway = buildCauseway();   /* M3-CW：第 5 个可玩场景（单赛道；不进 RENDER_ORDER） */
+  SCENES_ALL.forEach(function(k){
     if (SCN[k].hero){
       SCN[k].hero.home = SCN[k].hero.position.clone();
       /* 记录构建期基准，供 setScene 往返复位（保证 heroC 逐位可复现） */
@@ -3168,7 +3400,7 @@ function boot(){
     }
   });
   setupCameras();
-  RENDER_ORDER.forEach(function(k){ CameraRig.init(k); });   /* M2：记录各关基准机位与出生点 */
+  SCENES_ALL.forEach(function(k){ CameraRig.init(k); });   /* M2：记录各关基准机位与出生点 */
   scenesReady = true;
   if (!SCN[cur]) cur = 'home';
   setScene(cur);
@@ -3193,7 +3425,7 @@ window.__setScene = setScene;
 window.__SCN = SCN; /* 调试钩子：控制台可访问各场景对象 */
 window.__info = function(){
   var out = {};
-  RENDER_ORDER.forEach(function(k){
+  SCENES_ALL.forEach(function(k){
     var c = SCN[k].camera, h = SCN[k].hero;
     var e = { cam: c.position.toArray().map(function(v){return +v.toFixed(2);}), children: SCN[k].scene.children.length };
     if (h){
@@ -3219,7 +3451,8 @@ window.__info = function(){
              heroX: SCN[cur] && SCN[cur].hero ? +SCN[cur].hero.position.x.toFixed(3) : null,
              heroZ: SCN[cur] && SCN[cur].hero ? +SCN[cur].hero.position.z.toFixed(3) : null,
              camOff: CameraRig.off(cur),
-             lane: Lane.info(), stopped: PlayerController.stopped, autoSpeed: CFG.SPEED_F };
+             lane: Lane.info(), stopped: PlayerController.stopped, autoSpeed: CFG.SPEED_F,
+             track: Track.info() };
   return out;
 };
 boot();
