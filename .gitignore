@@ -12,9 +12,12 @@
 # 产出图（构建产物，不入库；本地可随时由 tools/quad.js 等重新生成）
 out/
 
+# 静态部署包（构建产物，不入库；由 声浪星球.html + three.min.js + assets/ 组装）
+dist/
+
 # P5 · 真实歌曲压力测试样本（仅本地测试；版权红线 R6：不入库 / 不部署 / 不打包）
+# 注：分析结论报告 docs/真实歌分析-压力测试报告.md 仅含指标数字，可入库；以下仅为音频样本隔离
 assets/local-*.wav
 assets/local-*.mp3
 assets/local-*.m4a
 assets/upload-*
-docs/真实歌分析-压力测试报告.local.md
