@@ -354,6 +354,151 @@
   #songsel .pgt{margin-top:calc(8*var(--px));text-align:center;font-size:calc(18*var(--px));
     font-weight:700;letter-spacing:.04em;color:rgba(255,255,255,.52);display:none}
   #songsel .pgt.on{display:block}
+
+  /* ============ P7 · 浮层：星球图鉴（Codex） / 设置（Settings） ============
+     范式与 #songsel 完全一致（见上）：body 级兄弟 + 惰性构建 + .on 显隐 ⇒ 对定帧画面 /
+     draw call / SHOWCASE 四宫格**零影响**。z-index 22 与 #songsel 同层（三者互斥，不同时开）。 */
+  #codex, #settings{--px:calc(100vh / 941);position:fixed;inset:0;z-index:22;display:none;
+    align-items:center;justify-content:center;pointer-events:none;
+    background:radial-gradient(circle at 50% 40%,rgba(8,4,22,.74),rgba(3,2,10,.92))}
+  #codex.on, #settings.on{display:flex;pointer-events:auto}
+  #codex .card, #settings .card{max-height:calc(884*var(--px));overflow:auto;
+    padding:calc(30*var(--px)) calc(44*var(--px)) calc(24*var(--px));
+    border-radius:calc(34*var(--px));background:rgba(14,8,34,.88);
+    border:calc(2*var(--px)) solid rgba(140,255,200,.24);color:#fff;
+    box-shadow:0 calc(32*var(--px)) calc(96*var(--px)) rgba(0,0,0,.58);backdrop-filter:blur(10px)}
+  /* 两栏"图鉴/设置页"版式：视口很宽（16:9）而卡片居中 ⇒ 单栏会把内容挤到折叠线以下，
+     故一律排成左右两栏，一屏看全（窄窗口时 max-height + overflow 兜底可滚动）。 */
+  #codex .card{width:calc(1600*var(--px))}
+  #settings .card{width:calc(1320*var(--px))}
+  #codex .cols, #settings .cols{display:grid;
+    grid-template-columns:1.1fr 1fr;gap:0 calc(44*var(--px));
+    margin-top:calc(4*var(--px))}
+  #codex .cols .sec, #settings .cols .sec{margin-top:calc(20*var(--px))}
+  #codex .hd, #settings .hd{font-size:calc(28*var(--px));font-weight:800;letter-spacing:.10em}
+  #codex .sub, #settings .sub{margin-top:calc(6*var(--px));font-size:calc(19*var(--px));font-weight:600;
+    letter-spacing:.04em;color:rgba(255,255,255,.56)}
+  #codex .sec, #settings .sec{margin-top:calc(18*var(--px));font-size:calc(20*var(--px));font-weight:800;
+    letter-spacing:.20em;color:rgba(140,255,200,.86)}
+  #codex .bts, #settings .bts{display:flex;justify-content:center;gap:calc(20*var(--px));
+    margin-top:calc(18*var(--px))}
+  #codex .bts b, #settings .bts b{padding:calc(14*var(--px)) calc(40*var(--px));
+    border-radius:calc(999*var(--px));font-size:calc(24*var(--px));font-weight:700;letter-spacing:.10em;
+    cursor:pointer;border:calc(2*var(--px)) solid rgba(255,255,255,.32);
+    background:rgba(255,255,255,.12);color:#fff;transition:background .12s,border-color .12s,transform .12s}
+  #codex .bts b:hover, #settings .bts b:hover{background:rgba(255,255,255,.22)}
+  #codex .bts b.warn{border-color:rgba(232,138,138,.62);background:rgba(232,138,138,.16)}
+  #codex .bts b.warn:hover{background:rgba(232,138,138,.26)}
+  #codex .hint, #settings .hint{margin-top:calc(8*var(--px));text-align:center;
+    font-size:calc(17*var(--px));font-weight:600;letter-spacing:.04em;color:rgba(255,255,255,.44)}
+
+  /* ---- 图鉴：曲目卡（复用 #songsel .tk 语汇）+ S/A/B/C 徽标（配色同 #cwres .rk）----
+     版式刻意定为「固定 3 行 + 右侧定宽徽标」：战绩文本长度会随通关变化，若让它参与宽度分配，
+     行高会被战绩撑开、把机制区顶到折叠线以下（实测过）。故战绩一律进 tags 行当一枚 chip。 */
+  #codex .tracks{margin-top:calc(14*var(--px));display:flex;flex-direction:column;gap:calc(12*var(--px))}
+  #codex .tk{display:flex;align-items:center;gap:calc(20*var(--px));
+    padding:calc(11*var(--px)) calc(18*var(--px));border-radius:calc(18*var(--px));
+    border:calc(2*var(--px)) solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);
+    transition:border-color .12s,background .12s}
+  #codex .tk.cur{border-color:rgba(140,255,200,.60);background:rgba(140,255,200,.10)}
+  #codex .tk .nm{flex:1;min-width:0}
+  #codex .tk .nm b{display:block;font-size:calc(25*var(--px));font-weight:800;letter-spacing:.02em}
+  #codex .tk .nm s{display:block;text-decoration:none;margin-top:calc(4*var(--px));
+    font-size:calc(16*var(--px));font-weight:600;color:rgba(255,255,255,.52)}
+  #codex .tags{margin-top:calc(6*var(--px));display:flex;flex-wrap:wrap;gap:calc(6*var(--px))}
+  #codex .tags i{font-style:normal;font-size:calc(14*var(--px));font-weight:700;letter-spacing:.04em;
+    padding:calc(3*var(--px)) calc(10*var(--px));border-radius:calc(999*var(--px));
+    border:calc(2*var(--px)) solid rgba(125,232,255,.42);background:rgba(125,232,255,.14);color:#BFEFFF}
+  #codex .tags i.rec{border-color:rgba(140,255,200,.50);background:rgba(140,255,200,.14);color:#C8FFE4;
+    font-variant-numeric:tabular-nums}
+  #codex .tags i.rec.off{border-color:rgba(255,255,255,.20);background:rgba(255,255,255,.06);
+    color:rgba(255,255,255,.42)}
+  #codex .tk .rk{flex:0 0 calc(54*var(--px));text-align:center;
+    font-size:calc(42*var(--px));font-weight:800;line-height:1;letter-spacing:.02em}
+  #codex .tk .rk.S{color:#8CFFC8;text-shadow:0 0 calc(26*var(--px)) rgba(140,255,200,.72)}
+  #codex .tk .rk.A{color:#7DE8FF;text-shadow:0 0 calc(24*var(--px)) rgba(125,232,255,.66)}
+  #codex .tk .rk.B{color:#FFE27A;text-shadow:0 0 calc(22*var(--px)) rgba(255,226,122,.58)}
+  #codex .tk .rk.C{color:#E88A8A;text-shadow:0 0 calc(20*var(--px)) rgba(232,138,138,.52)}
+  #codex .tk .rk.N{color:rgba(255,255,255,.22)}
+  /* ---- 图鉴：机制卡（M1–M7）---- */
+  #codex .mechGrid{margin-top:calc(14*var(--px));display:grid;
+    grid-template-columns:repeat(2,1fr);gap:calc(10*var(--px))}
+  #codex .mch{padding:calc(12*var(--px)) calc(15*var(--px));border-radius:calc(18*var(--px));
+    border:calc(2*var(--px)) solid rgba(255,255,255,.14);background:rgba(255,255,255,.05)}
+  #codex .mch b{display:block;font-size:calc(20*var(--px));font-weight:800;letter-spacing:.02em;color:#C8FFE4}
+  #codex .mch s{display:block;text-decoration:none;margin-top:calc(5*var(--px));
+    font-size:calc(15*var(--px));font-weight:600;line-height:1.38;color:rgba(255,255,255,.60)}
+  #codex .mch u{display:inline-block;text-decoration:none;margin-top:calc(8*var(--px));
+    font-size:calc(13.5*var(--px));font-weight:700;letter-spacing:.05em;
+    padding:calc(2.5*var(--px)) calc(10*var(--px));border-radius:calc(999*var(--px));
+    border:calc(1.5*var(--px)) solid rgba(140,255,200,.42);background:rgba(140,255,200,.12);color:#C8FFE4}
+
+  /* ---- 设置：行 / 滑杆 / 档位 / 开关 / 键位表 ---- */
+  #settings .row{display:flex;align-items:center;gap:calc(20*var(--px));
+    margin-top:calc(12*var(--px));padding:calc(12*var(--px)) calc(18*var(--px));
+    border-radius:calc(18*var(--px));border:calc(2*var(--px)) solid rgba(255,255,255,.12);
+    background:rgba(255,255,255,.05)}
+  #settings .row .lb{flex:0 0 calc(206*var(--px));font-size:calc(21*var(--px));font-weight:700;
+    letter-spacing:.04em}
+  #settings .row .lb s{display:block;text-decoration:none;margin-top:calc(4*var(--px));
+    font-size:calc(15*var(--px));font-weight:600;color:rgba(255,255,255,.42)}
+  #settings input[type=range]{-webkit-appearance:none;appearance:none;flex:1;height:calc(10*var(--px));
+    border-radius:calc(999*var(--px));background:rgba(255,255,255,.18);outline:none;cursor:pointer}
+  #settings input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+    width:calc(26*var(--px));height:calc(26*var(--px));border-radius:50%;border:0;cursor:pointer;
+    background:linear-gradient(135deg,#8CFFC8,#7DE8FF);
+    box-shadow:0 0 calc(16*var(--px)) rgba(140,255,200,.66)}
+  #settings .val{flex:0 0 calc(76*var(--px));text-align:right;font-size:calc(20*var(--px));
+    font-weight:800;font-variant-numeric:tabular-nums;color:#C8FFE4}
+  #settings .seg{flex:1;display:flex;gap:calc(8*var(--px))}
+  #settings .seg b{flex:1;text-align:center;padding:calc(9*var(--px)) 0;cursor:pointer;
+    border-radius:calc(999*var(--px));font-size:calc(19*var(--px));font-weight:700;letter-spacing:.08em;
+    border:calc(2*var(--px)) solid rgba(255,255,255,.20);background:rgba(255,255,255,.06);
+    color:rgba(255,255,255,.70);transition:background .12s,border-color .12s,color .12s}
+  #settings .seg b:hover{background:rgba(255,255,255,.14)}
+  #settings .seg b.on{border-color:rgba(140,255,200,.80);background:rgba(140,255,200,.18);color:#fff;
+    box-shadow:0 0 calc(20*var(--px)) rgba(140,255,200,.28)}
+  #settings .sw{flex:1;display:flex;align-items:center;gap:calc(14*var(--px));cursor:pointer}
+  #settings .sw .trk{display:block;position:relative;flex:0 0 auto;width:calc(76*var(--px));
+    height:calc(36*var(--px));
+    border-radius:calc(999*var(--px));border:calc(2*var(--px)) solid rgba(255,255,255,.24);
+    background:rgba(255,255,255,.08);transition:background .14s,border-color .14s}
+  #settings .sw .trk:after{content:"";position:absolute;left:calc(3*var(--px));top:calc(3*var(--px));
+    width:calc(26*var(--px));height:calc(26*var(--px));border-radius:50%;
+    background:rgba(255,255,255,.62);transition:transform .14s,background .14s}
+  #settings .sw.on .trk{border-color:rgba(140,255,200,.76);background:rgba(140,255,200,.20)}
+  #settings .sw.on .trk:after{transform:translateX(calc(40*var(--px)));background:#8CFFC8}
+  #settings .sw .tx{font-size:calc(18*var(--px));font-weight:700;letter-spacing:.06em;
+    color:rgba(255,255,255,.56)}
+  #settings .sw.on .tx{color:#C8FFE4}
+  #settings .keys{margin-top:calc(14*var(--px));display:grid;
+    grid-template-columns:repeat(3,1fr);gap:calc(9*var(--px)) calc(18*var(--px))}
+  #settings .keys i{font-style:normal;display:flex;align-items:center;gap:calc(12*var(--px));
+    font-size:calc(18*var(--px));font-weight:600;color:rgba(255,255,255,.66)}
+  #settings .keys kbd{font-family:inherit;font-size:calc(16*var(--px));font-weight:800;letter-spacing:.04em;
+    padding:calc(4*var(--px)) calc(12*var(--px));border-radius:calc(8*var(--px));
+    border:calc(1.5*var(--px)) solid rgba(255,255,255,.30);background:rgba(255,255,255,.10);color:#fff}
+  #settings .note{margin-top:calc(12*var(--px));font-size:calc(16*var(--px));font-weight:600;
+    line-height:1.5;letter-spacing:.02em;color:rgba(255,255,255,.40)}
+
+  /* ---- 无障碍（P7）：大字 / 减弱动效 —— 均**只作用于 DOM**，默认不生效、零 draw call ---- */
+  body.bigui #codex .hd, body.bigui #settings .hd{font-size:calc(36*var(--px))}
+  body.bigui #codex .sub, body.bigui #settings .sub{font-size:calc(24*var(--px))}
+  body.bigui #codex .sec, body.bigui #settings .sec{font-size:calc(24*var(--px))}
+  body.bigui #codex .tk .nm b{font-size:calc(33*var(--px))}
+  body.bigui #codex .tk .nm s, body.bigui #codex .mch s{font-size:calc(21*var(--px))}
+  body.bigui #codex .mch b{font-size:calc(26*var(--px))}
+  body.bigui #settings .row .lb{font-size:calc(25*var(--px))}
+  body.bigui #settings .keys i, body.bigui #settings .seg b{font-size:calc(22*var(--px))}
+  body.bigui #codex .hint, body.bigui #settings .hint{font-size:calc(21*var(--px))}
+  body.rm #codex .card, body.rm #settings .card, body.rm #songsel .card,
+  body.rm #codex .bts b, body.rm #settings .bts b, body.rm #settings .seg b,
+  body.rm #settings .sw .trk, body.rm #settings .sw .trk:after,
+  body.rm #songsel .tk, body.rm #codex .tk{transition:none}
+  body.rm #codex .bts b:hover, body.rm #settings .bts b:hover,
+  body.rm #songsel .tk:hover, body.rm #codex .tk:hover,
+  body.rm .menu button:hover, body.rm #cwres .bts b:hover{transform:none}
+
   /* ---- P2·CWMech：运行时机制表现层（纯 DOM / 零 draw call；M1 开闸 / M2 DROP 大字 / M5 航线 chip）---- */
   #cwmech{--px:calc(100vh / 941);position:fixed;inset:0;pointer-events:none;z-index:15;
     opacity:0;transition:opacity .2s;font-family:inherit}
@@ -2655,8 +2800,8 @@ var HUD_DEF = {
     return '<div class="hud title"><h1>声浪星球</h1><p>用音乐，探索更远的世界</p><div class="menu">' +
       '<button class="primary" data-go="causeway"><span class="ic">⚡</span>超频长阶</button>' +
       '<button data-songsel="1"><span class="ic">♫</span>选择歌曲</button>' +
-      '<button data-go="home"><span class="ic">▣</span>星球图鉴</button>' +
-      '<button data-go="home"><span class="ic">⚙</span>设置</button></div>' +
+      '<button data-codex="1"><span class="ic">▣</span>星球图鉴</button>' +
+      '<button data-settings="1"><span class="ic">⚙</span>设置</button></div>' +
       /* 署名：说唱曲目素材为 CC BY 4.0，按许可要求标注作者与来源 */
       '<p style="margin:16px 0 0;font-size:11px;line-height:1.5;opacity:.5;letter-spacing:.02em">' +
       '音乐：Kevin MacLeod (incompetech.com) · CC BY 4.0</p></div>';
@@ -2698,6 +2843,9 @@ function buildHUD(){
       if (SHOWCASE) return;
       initAudio();
       if (b.getAttribute('data-songsel')){ SongSelect.open(); return; }   /* P1：曲目选择浮层 */
+      /* P7：图鉴 / 设置——两个纯 DOM 浮层（点开即用户手势，上面的 initAudio 也已解锁音频） */
+      if (b.getAttribute('data-codex')){ PlanetCodex.open(); return; }
+      if (b.getAttribute('data-settings')){ PlanetSettings.open(); return; }
       setScene(b.getAttribute('data-go'));
     });
   });
@@ -2782,6 +2930,8 @@ function initAudio(){
   if (actx){
     /* M3-CW：首次取得 AudioContext（用户手势）后补齐音乐总线 / 解码 BGM / 起播待播曲 */
     initMusicBus(); bgmDecode();
+    /* P7：AudioContext 就绪后把「设置里调过的音量」重新贴回总线（initMusicBus 内有硬编码初值） */
+    PlanetSettings.applyAudio();
     if (BGM.want && !BGM.playing) BGM.start();
   }
 }
@@ -2843,9 +2993,10 @@ addEventListener('pointerup', function(e){ if (isCw()) CWInput.release(e.clientY
 addEventListener('pointercancel', function(){ if (isCw()) CWInput.cancel(); });
 addEventListener('keydown', function(e){
   Input.keys[e.code] = true;
-  /* P1：曲目浮层打开时独占键盘（Esc / 回车关闭），避免误触玩法输入 */
-  if (SongSelect.isOpen()){
-    if (e.key === 'Escape' || e.key === 'Enter'){ e.preventDefault(); SongSelect.close(); }
+  /* P7：浮层独占键盘（Esc / 回车关闭），避免误触玩法输入。
+     注意本守卫必须位于下方 1/5 场景快捷键**之前**并 return —— 否则开着浮层按 1/5 会切场景。 */
+  if (overlayOpen()){
+    if (e.key === 'Escape' || e.key === 'Enter'){ e.preventDefault(); closeOverlay(); }
     return;
   }
   if (isCw()){
@@ -4875,6 +5026,351 @@ var SongSelect = {
 };
 
 /* ==========================================================================
+   P7 · 星球图鉴（Codex）/ 设置（Settings）—— 两个纯 DOM 浮层
+   --------------------------------------------------------------------------
+   共同点（与 SongSelect 完全同范式）：
+     · body 级兄弟 + 惰性构建（ensure() 只由 open() 触发）⇒ freeze 页 / 门禁页零额外 DOM；
+     · 不新增任何 three 对象 ⇒ 对 draw call / 定帧 heroC / SHOWCASE 四宫格**零影响**；
+     · 显隐靠 .on（CSS L361 起）；关闭入口 = Esc / Enter / 返回按钮（与 SongSelect 一致，
+       刻意**不做**"点背景关闭"：现场演示里误触改音量/画质比点不中更尴尬）。
+     · 三者互斥：任一 open() 时先关掉另两个 ⇒ 共用 z-index 22 不会叠加。
+
+   图鉴为什么要做：本作卖点是「音乐结构 → 机制」（M1–M7），而这套东西在局内是**看不见**的。
+   图鉴把 4 首内置曲 × 7 种机制 + 通关评级摆成一张表，让"换歌即换关"从体感变成可读的证据。
+   设置为什么要做：此前只有 M 键静音，音量 / 画质无从调节；现场投影的音量与性能都要能现场调。
+   ========================================================================== */
+
+/* ---- P7 · 本地存档（图鉴的"战绩"层）---------------------------------------
+   为什么可以放心写：图鉴记录**只写不读玩法参数** —— 判定窗口 / 赛道物理 / 计分乘区全部不受影响，
+   唯一读取点是图鉴自己的渲染 ⇒ 对本项目"门禁基线零漂移"的红线是安全的。
+   storage 在隐私模式 / file:// 下可能抛错 ⇒ 全部 try/catch 降级为「仅本局内存」，绝不阻断启动。 */
+var PlanetRecord = {
+  KEY: 'swp.records.v1',
+  data: {},
+  ORDER: { S: 4, A: 3, B: 2, C: 1 },
+  load: function(){
+    PlanetRecord.data = {};
+    try {
+      var raw = window.localStorage ? window.localStorage.getItem(PlanetRecord.KEY) : null;
+      if (raw){
+        var o = JSON.parse(raw);
+        if (o && typeof o === 'object') PlanetRecord.data = o;
+      }
+    } catch(e){ PlanetRecord.data = {}; }
+    return PlanetRecord.data;
+  },
+  save: function(){
+    try {
+      if (window.localStorage) window.localStorage.setItem(PlanetRecord.KEY, JSON.stringify(PlanetRecord.data));
+    } catch(e){}
+    return true;
+  },
+  clear: function(){ PlanetRecord.data = {}; PlanetRecord.save(); return true; },
+  /* 记账：rank 取更优、score 取更高、clears 累加 —— 承 P3「只奖励、不惩罚」：更差的一局冲不掉记录 */
+  commit: function(r, id){
+    if (!r || !id) return null;
+    var cur = PlanetRecord.data[id] || { rank: null, score: 0, acc: 0, clears: 0 };
+    var rank = r.rank || 'C';
+    if (PlanetRecord.ORDER[rank] > (PlanetRecord.ORDER[cur.rank] || 0)) cur.rank = rank;
+    if ((r.score || 0) > (cur.score || 0)){ cur.score = r.score || 0; cur.acc = r.acc || 0; }
+    cur.clears = (cur.clears || 0) + 1;
+    PlanetRecord.data[id] = cur;
+    PlanetRecord.save();
+    return cur;
+  },
+  get: function(id){ return PlanetRecord.data[id] || null; },
+  count: function(){
+    var n = 0, k;
+    for (k in PlanetRecord.data) if (PlanetRecord.data.hasOwnProperty(k)) n++;
+    return n;
+  }
+};
+/* 关结算面板即记账（Bus.emit 自带 try/catch ⇒ 存档异常绝不波及玩法） */
+Bus.on('cw:result', function(r){ PlanetRecord.commit(r, CW.track ? CW.track.id : null); });
+
+/* ---- P7 · 机制图鉴词条（M1–M7）--------------------------------------------
+   文案严格对齐源码注释（CWMech L4316 起 / ChartGen L3618）—— 不是营销语，是"这套引擎到底做了什么"。 */
+var MECHS = [
+  { k: 'M1', n: '副歌开闸',   d: '进副歌即开闸：乘区封顶 ×1.5 并点亮一次过载脉冲。', t: '段落 = chorus' },
+  { k: 'M2', n: 'Drop 俯冲',  d: '首次进高潮：镜头 FOV 尖峰 + 全屏 DROP 大字，段内首个双闸门给全曲最高加分。', t: '段落 = climax' },
+  { k: 'M3', n: '蓄能',       d: '预副歌内持续长按同调累积蓄能，蓄满乘区由 1.0 抬到 1.3。', t: '段落 = preChorus' },
+  { k: 'M4', n: '终结拍',     d: '终章最长的那个长音：命中给一次性高额加分 + 乘区封顶 ×1.5。全曲仅一次。', t: 'outro 最长长音' },
+  { k: 'M5', n: '旋律航线',   d: '把音高斜率铺成跑道上看得见的旋律走向，站上同层航线给 ×1.25。', t: '八分音符音高斜率' },
+  { k: 'M6', n: '用跑道弹琴', d: '命中音高取自段内五声音阶步进（低能段整体下沉）⇒ 跑道即琴键。', t: '段落音区' },
+  { k: 'M7', n: '结构轮转',   d: '「音乐结构 → 机制」的翻译表：段落序列不同 ⇒ 开闸点 / 航线 / 音区全变。', t: 'ChartGen' }
+];
+
+/* ---- P7 · 星球图鉴浮层 ---------------------------------------------------- */
+var PlanetCodex = {
+  el: null,
+  Q: null,
+  num: function(n){ return String(n == null ? 0 : n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); },
+  ensure: function(){
+    if (PlanetCodex.el) return PlanetCodex.el;
+    var d = document.createElement('div'); d.id = 'codex';
+    d.innerHTML = '<div class="card">' +
+      '<div class="hd">星球图鉴</div>' +
+      '<div class="sub">4 首曲目 · 7 种机制 —— 音乐结构即关卡</div>' +
+      '<div class="cols">' +
+        '<div class="col"><div class="sec">曲 目</div><div class="tracks"></div></div>' +
+        '<div class="col"><div class="sec">机 制 · M1 – M7</div><div class="mechGrid"></div></div>' +
+      '</div>' +
+      '<div class="bts"><b data-act="back">返回</b><b class="warn" data-act="clear">清除记录</b></div>' +
+      '<div class="hint">换一首歌，换的不是曲包，是机制组合</div>' +
+      '</div>';
+    document.body.appendChild(d);
+    PlanetCodex.el = d;
+    PlanetCodex._q = { tracks: d.querySelector('.tracks'), mech: d.querySelector('.mechGrid'),
+                       clear: d.querySelector('#codex .bts b.warn') };
+    d.addEventListener('click', function(e){
+      var b = (e.target && e.target.closest) ? e.target.closest('#codex .bts b') : null;
+      if (!b) return;
+      var act = b.getAttribute('data-act');
+      if (act === 'back'){ PlanetCodex.close(); return; }
+      if (act === 'clear'){
+        /* 两步确认：第一次点击"上膛"，第二次才真清（避免误触抹掉战绩） */
+        if (b.getAttribute('data-armed')){
+          PlanetRecord.clear(); b.removeAttribute('data-armed'); b.textContent = '清除记录';
+          PlanetCodex.render();
+        } else {
+          b.setAttribute('data-armed', '1'); b.textContent = '确认清除？';
+        }
+      }
+    });
+    return d;
+  },
+  render: function(){
+    var d = PlanetCodex.ensure(), q = PlanetCodex._q;
+    var host = q.tracks; host.innerHTML = '';
+    Object.keys(TRACKS).forEach(function(id){
+      var tk = TRACKS[id], sn = trackSong(tk), rec = PlanetRecord.get(id);
+      var row = document.createElement('div');
+      row.className = 'tk' + ((CW.track && CW.track.id === id) ? ' cur' : '');
+      var tags = (tk.tags || []).map(function(x){ return '<i>' + x + '</i>'; }).join('');
+      var rank = (rec && rec.rank) ? rec.rank : 'N';
+      /* 战绩永远只占 tags 行里的一枚 chip ⇒ 行高固定 3 行，不随战绩长度变化 */
+      var recChip = (rec && rec.clears)
+        ? '<i class="rec">最高 ' + PlanetCodex.num(rec.score) + ' · ' + (rec.acc * 100).toFixed(1) +
+          '% · ×' + rec.clears + '</i>'
+        : '<i class="rec off">尚未通关</i>';
+      row.innerHTML =
+        '<div class="nm"><b>' + sn.name + '</b>' +
+          '<s>' + sn.artist + ' · ' + tk.segs + ' 段结构 · ' + sn.bpm + ' BPM</s>' +
+          '<div class="tags">' + tags + recChip + '</div></div>' +
+        '<span class="rk ' + rank + '">' + (rank === 'N' ? '—' : rank) + '</span>';
+      host.appendChild(row);
+    });
+    if (q.clear){ q.clear.removeAttribute('data-armed'); q.clear.textContent = '清除记录'; }
+    var mg = q.mech; mg.innerHTML = '';
+    MECHS.forEach(function(m){
+      var c = document.createElement('div'); c.className = 'mch';
+      c.innerHTML = '<b>' + m.k + ' · ' + m.n + '</b><s>' + m.d + '</s><u>' + m.t + '</u>';
+      mg.appendChild(c);
+    });
+    return d;
+  },
+  open: function(){
+    SongSelect.close(); PlanetSettings.close();
+    PlanetCodex.render().classList.add('on');
+  },
+  close: function(){ if (PlanetCodex.el) PlanetCodex.el.classList.remove('on'); },
+  isOpen: function(){ return !!(PlanetCodex.el && PlanetCodex.el.classList.contains('on')); },
+  info: function(){
+    return { open: PlanetCodex.isOpen(), tracks: Object.keys(TRACKS).length,
+             mechs: MECHS.length, cleared: PlanetRecord.count() };
+  }
+};
+
+/* ---- P7 · 设置浮层 --------------------------------------------------------
+   DEFAULTS 必须**逐位等于现状**（sfx = master.gain 0.5 / bgm = musicBus.gain 0.60 /
+   画质 = min(dpr, 2) / 大字关 / 动效开），否则"默认设置"本身就成了对门禁基线的改动。 */
+var PlanetSettings = {
+  KEY: 'swp.settings.v1',
+  DEFAULTS: { bgm: 0.60, sfx: 0.50, quality: 'high', big: false, motion: true },
+  opts: null, el: null, _q: null,
+  load: function(){
+    var o = { bgm: PlanetSettings.DEFAULTS.bgm, sfx: PlanetSettings.DEFAULTS.sfx,
+              quality: PlanetSettings.DEFAULTS.quality, big: PlanetSettings.DEFAULTS.big,
+              motion: PlanetSettings.DEFAULTS.motion };
+    try {
+      var raw = window.localStorage ? window.localStorage.getItem(PlanetSettings.KEY) : null;
+      if (raw){
+        var s = JSON.parse(raw);
+        if (s && typeof s === 'object'){
+          var k;
+          for (k in PlanetSettings.DEFAULTS){
+            if (PlanetSettings.DEFAULTS.hasOwnProperty(k) && s[k] !== undefined) o[k] = s[k];
+          }
+        }
+      }
+    } catch(e){}
+    PlanetSettings.opts = o;
+    PlanetSettings.apply();
+    return o;
+  },
+  save: function(){
+    try {
+      if (window.localStorage) window.localStorage.setItem(PlanetSettings.KEY, JSON.stringify(PlanetSettings.opts));
+    } catch(e){}
+    return true;
+  },
+  /* 音量：SFX → master.gain；BGM → musicBus.gain（静音仍由 outBus 总闸负责，两者正交）
+     · 单独拆出的原因：master/musicBus 在 initAudio()/initMusicBus() 里创建并硬编码初值，
+       而它们可能晚于 load() ⇒ initAudio 内必须回调一次，否则调过的音量会被硬编码值覆盖。 */
+  applyAudio: function(){
+    var o = PlanetSettings.opts; if (!o) return;
+    if (master) master.gain.value = o.sfx;
+    if (musicBus) musicBus.gain.value = o.bgm;
+  },
+  /* 画质：high = min(dpr,2)（= 现状）。**带 diff 守卫** ⇒ 默认档下不调 setPixelRatio，
+     避免二次 resize 绘图缓冲 —— 这也是"默认值不改门禁基线"的关键。 */
+  applyQuality: function(){
+    var o = PlanetSettings.opts; if (!o || !renderer) return;
+    var dpr = window.devicePixelRatio || 1;
+    var want = (o.quality === 'high') ? Math.min(dpr, 2) : (o.quality === 'mid' ? 1.5 : 1.0);
+    if (renderer.getPixelRatio() !== want) renderer.setPixelRatio(want);
+  },
+  /* 大字 / 减弱动效：均为 body 上的 class，纯 CSS 消费 ⇒ 不碰任何 three 对象、零 draw call */
+  apply: function(){
+    var o = PlanetSettings.opts; if (!o) return;
+    PlanetSettings.applyAudio();
+    PlanetSettings.applyQuality();
+    var b = document.body;
+    if (b && b.classList){
+      if (o.big) b.classList.add('bigui'); else b.classList.remove('bigui');
+      if (o.motion) b.classList.remove('rm'); else b.classList.add('rm');
+    }
+  },
+  set: function(k, v){
+    if (!PlanetSettings.opts) PlanetSettings.load();
+    PlanetSettings.opts[k] = v;
+    PlanetSettings.save();
+    PlanetSettings.apply();
+    PlanetSettings.sync();
+    return PlanetSettings.opts[k];
+  },
+  ensure: function(){
+    if (PlanetSettings.el) return PlanetSettings.el;
+    var d = document.createElement('div'); d.id = 'settings';
+    d.innerHTML = '<div class="card">' +
+      '<div class="hd">设置</div>' +
+      '<div class="sub">音量 / 画质 / 键位 / 无障碍 —— 改动即时生效并保存在本机</div>' +
+      '<div class="cols">' +
+        '<div class="col"><div class="sec">音 频</div>' +
+          '<div class="row"><div class="lb">音乐音量<s>背景音乐 BGM</s></div>' +
+            '<input type="range" data-set="bgm" min="0" max="100" step="5">' +
+            '<div class="val" data-val="bgm">60%</div></div>' +
+          '<div class="row"><div class="lb">音效音量<s>判定 / 反馈 / UI</s></div>' +
+            '<input type="range" data-set="sfx" min="0" max="100" step="5">' +
+            '<div class="val" data-val="sfx">50%</div></div>' +
+          '<div class="row"><div class="lb">静音<s>等同快捷键 M</s></div>' +
+            '<div class="sw" data-sw="mute"><i class="trk"></i><span class="tx">关</span></div></div>' +
+        '</div>' +
+        '<div class="col"><div class="sec">画 质</div>' +
+          '<div class="row"><div class="lb">渲染精度<s>影响清晰度与性能</s></div>' +
+            '<div class="seg" data-seg="quality">' +
+            '<b data-v="low">低</b><b data-v="mid">中</b><b data-v="high">高</b></div></div>' +
+          '<div class="sec">无 障 碍</div>' +
+          '<div class="row"><div class="lb">大字<s>放大浮层文字</s></div>' +
+            '<div class="sw" data-sw="big"><i class="trk"></i><span class="tx">关</span></div></div>' +
+          '<div class="row"><div class="lb">减弱动效<s>去掉位移与过渡动画</s></div>' +
+            '<div class="sw" data-sw="motion"><i class="trk"></i><span class="tx">关</span></div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="sec">键 位</div>' +
+      '<div class="keys">' +
+        '<i><kbd>↑</kbd><kbd>W</kbd>升（超频长阶）</i>' +
+        '<i><kbd>↓</kbd><kbd>S</kbd>降（超频长阶）</i>' +
+        '<i><kbd>长按 空格</kbd>同调</i>' +
+        '<i><kbd>←</kbd><kbd>→</kbd>换道</i>' +
+        '<i><kbd>空格</kbd>跳跃</i>' +
+        '<i><kbd>F</kbd>交互</i>' +
+        '<i><kbd>M</kbd>静音</i>' +
+        '<i><kbd>1</kbd><kbd>5</kbd>枢纽 / 超频长阶</i>' +
+        '<i><kbd>Esc</kbd>关闭浮层</i>' +
+      '</div>' +
+      '<div class="note">触摸通道：上半屏轻点「升」/ 下半屏轻点「降」/ 长按任意处「同调」。</div>' +
+      '<div class="bts"><b data-act="back">返回</b></div>' +
+      '<div class="hint">设置只保存在本机浏览器，不上传服务器</div>' +
+      '</div>';
+    document.body.appendChild(d);
+    PlanetSettings.el = d;
+    PlanetSettings._q = {
+      bgm: d.querySelector('input[data-set="bgm"]'), sfx: d.querySelector('input[data-set="sfx"]'),
+      vBgm: d.querySelector('[data-val="bgm"]'), vSfx: d.querySelector('[data-val="sfx"]'),
+      seg: d.querySelectorAll('#settings .seg b'),
+      swMute: d.querySelector('[data-sw="mute"]'), swBig: d.querySelector('[data-sw="big"]'),
+      swMotion: d.querySelector('[data-sw="motion"]')
+    };
+    /* 滑杆：input 事件即时生效（拖动时就能听到音量变化） */
+    d.addEventListener('input', function(e){
+      var t = e.target; if (!t || !t.getAttribute) return;
+      var k = t.getAttribute('data-set'); if (!k) return;
+      PlanetSettings.set(k, (+t.value) / 100);
+    });
+    d.addEventListener('click', function(e){
+      var t = e.target; if (!t || !t.closest) return;
+      if (t.closest('#settings .bts b')){ PlanetSettings.close(); return; }
+      var seg = t.closest('#settings .seg b');
+      if (seg){ PlanetSettings.set('quality', seg.getAttribute('data-v')); return; }
+      var sw = t.closest('#settings .sw');
+      if (!sw) return;
+      var k = sw.getAttribute('data-sw');
+      if (k === 'mute'){ if (!actx) initAudio(); toggleMute(); PlanetSettings.sync(); return; }
+      PlanetSettings.set(k, !PlanetSettings.opts[k]);
+    });
+    return d;
+  },
+  sync: function(){
+    var q = PlanetSettings._q, o = PlanetSettings.opts;
+    if (!q || !o) return null;
+    var pb = Math.round(o.bgm * 100), ps = Math.round(o.sfx * 100);
+    if (q.bgm) q.bgm.value = pb;
+    if (q.sfx) q.sfx.value = ps;
+    if (q.vBgm) q.vBgm.textContent = pb + '%';
+    if (q.vSfx) q.vSfx.textContent = ps + '%';
+    Array.prototype.forEach.call(q.seg, function(b){
+      var on = b.getAttribute('data-v') === o.quality;
+      if (on) b.classList.add('on'); else b.classList.remove('on');
+    });
+    PlanetSettings._sw(q.swMute, !!muted, muted ? '开' : '关');
+    PlanetSettings._sw(q.swBig, !!o.big, o.big ? '开' : '关');
+    /* 「减弱动效」是**反相开关**：其 UI 状态 = !motion（motion=true 表示动效正常）。
+       这样标签所说「减弱动效：开」与 motion=false 严格对应，避免默认态被误读为已减弱。 */
+    PlanetSettings._sw(q.swMotion, !o.motion, o.motion ? '关' : '开');
+    return q;
+  },
+  _sw: function(el, on, txt){
+    if (!el) return;
+    if (on) el.classList.add('on'); else el.classList.remove('on');
+    var t = el.querySelector('.tx'); if (t) t.textContent = txt;
+  },
+  open: function(){
+    SongSelect.close(); PlanetCodex.close();
+    if (!PlanetSettings.opts) PlanetSettings.load();
+    PlanetSettings.ensure(); PlanetSettings.sync();
+    PlanetSettings.el.classList.add('on');
+  },
+  close: function(){ if (PlanetSettings.el) PlanetSettings.el.classList.remove('on'); },
+  isOpen: function(){ return !!(PlanetSettings.el && PlanetSettings.el.classList.contains('on')); },
+  info: function(){
+    var o = PlanetSettings.opts || PlanetSettings.DEFAULTS;
+    return { open: PlanetSettings.isOpen(), bgm: o.bgm, sfx: o.sfx, quality: o.quality,
+             big: !!o.big, motion: !!o.motion, mute: !!muted,
+             pixelRatio: renderer ? renderer.getPixelRatio() : null };
+  }
+};
+
+/* ---- P7 · 浮层总闸：三者互斥；键盘 Esc / Enter 走统一关闭通道 --------------- */
+function overlayOpen(){ return SongSelect.isOpen() || PlanetCodex.isOpen() || PlanetSettings.isOpen(); }
+function closeOverlay(){
+  if (PlanetSettings.isOpen()) return PlanetSettings.close();
+  if (PlanetCodex.isOpen())    return PlanetCodex.close();
+  if (SongSelect.isOpen())     return SongSelect.close();
+  return false;
+}
+
+/* ==========================================================================
    M3-CW · 障碍系统（Obstacle）—— 谱面 → 世界物体 → 掠过判定
    --------------------------------------------------------------------------
    障碍按谱面 z 静态落位（z = CW.Z_START − distAt(t) = Track.zOf(t)），角色沿 −z 迎面逼近。
@@ -5812,6 +6308,10 @@ Bus.on('progress', function(){ HUD.markDirty(); });
    7. 启动
    ========================================================================== */
 function boot(){
+  /* P7：只读取 + 应用「设置」与「战绩存档」，**不** ensure() 浮层 DOM
+     ⇒ freeze 页 / 门禁页零额外 DOM、零 draw call；且默认档下 setPixelRatio 被 diff 守卫跳过。 */
+  PlanetRecord.load();
+  PlanetSettings.load();
   srand(0x2F6E2B1); SCN.home   = buildHome();
   srand(0x51C7A3); SCN.desert = buildDesert();
   srand(0x9B31F7); SCN.cave   = buildCave();
@@ -5895,6 +6395,10 @@ window.__cwTracks = function(){
   });
 };
 window.__SongSelect = SongSelect;
+/* P7 · 图鉴 / 设置 / 战绩存档 调试与门禁钩子（纯 DOM 浮层，无 three 对象） */
+window.__Codex = PlanetCodex;
+window.__Settings = PlanetSettings;
+window.__Record = PlanetRecord;
 /* P5 · 运行时分析器调试 / 门禁钩子 ---------------------------------------- */
 window.__RuntimeSong = RuntimeSong;
 window.__UserSong = UserSong;
@@ -5948,6 +6452,9 @@ window.__info = function(){
   out.calls = renderer.info.render.calls; out.tris = renderer.info.render.triangles;
   out.jump = { on: jump.on, y: +jump.y.toFixed(3), v: +jump.v.toFixed(3), perfect: !!jump.perfect };
   out.cur = cur;
+  /* P7：三个纯 DOM 浮层的开合状态（供门禁断言"开浮层不改 draw calls"） */
+  out.overlays = { songsel: SongSelect.isOpen(), codex: PlanetCodex.isOpen(),
+                   settings: PlanetSettings.isOpen() };
   var _lv = LEVELS[cur], _t = {};
   if (_lv) for (var _i = 0; _i < _lv.tasks.length; _i++) _t[_lv.tasks[_i].id] = GameState.get(_lv.tasks[_i].id) + '/' + _lv.tasks[_i].need;
   out.m1 = { mode: PlayerController.mode(cur), portal: GameState.portal, gems: GameState.get('gems'),

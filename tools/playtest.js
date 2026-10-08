@@ -42,6 +42,31 @@ const { chromium } = require('playwright-core');
   console.log('home title:', hud1);
   console.log('cave prompt present:', prompt);
   console.log('base minimap present:', map);
+
+  // P7 · 图鉴 / 设置浮层（只打印，不判失败 —— 断言在 mech.js ⑥c）
+  await page.keyboard.press('1');
+  await page.waitForTimeout(400);
+  const codex = await page.evaluate(() => {
+    const b = document.querySelector('.menu button[data-codex]'); if (!b) return { found: false };
+    b.click();
+    const el = document.querySelector('#codex');
+    return { found: true, on: !!(el && el.classList.contains('on')),
+             rows: el ? el.querySelectorAll('#codex .tk').length : 0,
+             mechs: el ? el.querySelectorAll('#codex .mch').length : 0 };
+  });
+  const settings = await page.evaluate(() => {
+    const b = document.querySelector('.menu button[data-settings]'); if (!b) return { found: false };
+    b.click();
+    const el = document.querySelector('#settings');
+    return { found: true, on: !!(el && el.classList.contains('on')),
+             sliders: el ? el.querySelectorAll('#settings input[type=range]').length : 0,
+             switches: el ? el.querySelectorAll('#settings .sw').length : 0,
+             bigui: document.body.classList.contains('bigui'),
+             rm: document.body.classList.contains('rm') };
+  });
+  console.log('codex:', JSON.stringify(codex));
+  console.log('settings:', JSON.stringify(settings));
+
   console.log(errs.length ? 'ERRORS:\n' + errs.join('\n') : 'no console errors');
   await browser.close();
 })();

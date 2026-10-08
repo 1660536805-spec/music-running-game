@@ -19,6 +19,8 @@
      ⑤c M5 旋律航线带（P4）：causeway 非定帧下航线带已挂载且段数 = 小节数。
      ⑥ SongSelect 浮层：可由枢纽「选择歌曲」打开、Esc 收起，且不产生 three 对象。
      ⑥b 定帧保护：FREEZE 下航线带不挂载（children 不增，护住 causeway 定帧基线）。
+     ⑥c 图鉴 / 设置浮层（P7）：两个枢纽按钮开合正常、图鉴 4 曲 × 7 机制内容完整、
+        设置默认值逐位等于现状、开/关浮层前后 draw calls 不变（纯 DOM 硬证据）。
      ⑦ 零 console / pageerror。
    任一不满足 → process.exit(1)。
    用法: node tools/mech.js
@@ -299,6 +301,68 @@ const GOLD = { track: 'rapGalactic', chart: 'assets/rap-galactic-chart.json', bg
   await fp.close();
   console.log('FREEZE lane3d = ' + JSON.stringify(fl3d) + '  causeway children=' + fchildren);
   ok(fl3d && fl3d.mounted === false, '⑥b FREEZE 下航线带仍被挂载（定帧 children 会漂移）');
+
+  /* ---------------- ⑥c 图鉴 / 设置浮层契约（P7 · 纯 DOM · 零 draw call） ----------------
+     为什么把断言写在这里：本脚本已是「浮层契约」的既有归属（见 ⑥ SongSelect）。⑥c 只做增量断言：
+       · 两个枢纽按钮（▣ 星球图鉴 / ⚙ 设置）确实打开各自浮层，且 Esc 可收；
+       · 图鉴内容完整（4 首内置曲 × 7 张机制卡）—— 内容缺失会让"图鉴"退化成空壳；
+       · **设置默认值必须逐位等于现状**（sfx 0.5 / bgm 0.60 / 画质 high / 大字关 / 动效开）——
+         默认值一旦漂移，"默认设置"本身就等于改门禁基线；
+       · **开/关浮层前后 draw calls 不变** —— 这是"纯 DOM、零 three 对象"的硬证据。 */
+  console.log('=== ⑥c 图鉴 / 设置浮层 ===');
+  const callsBefore = await page.evaluate(() => window.__info().calls);
+  const cx = await page.evaluate(() => {
+    const b = document.querySelector('.menu button[data-codex]');
+    if (!b) return { found: false };
+    b.click();
+    const el = document.querySelector('#codex');
+    const on = !!(el && el.classList.contains('on'));
+    const info = (window.__Codex && window.__Codex.info) ? window.__Codex.info() : {};
+    return { found: true, on: on, tracks: info.tracks, mechs: info.mechs,
+             rowEls: el ? el.querySelectorAll('#codex .tk').length : 0,
+             mchEls: el ? el.querySelectorAll('#codex .mch').length : 0 };
+  });
+  console.log('Codex = ' + JSON.stringify(cx));
+  ok(cx.found, '⑥c 枢纽未找到「星球图鉴」按钮');
+  ok(cx.on, '⑥c 点击后图鉴浮层未打开');
+  ok(cx.tracks === 4, '⑥c 图鉴内置曲目数应为 4: ' + cx.tracks);
+  ok(cx.mechs === 7, '⑥c 图鉴机制卡应为 7（M1–M7）: ' + cx.mechs);
+  ok(cx.rowEls === 4 && cx.mchEls === 7,
+     '⑥c 图鉴 DOM 行数与数据不符（曲目 ' + cx.rowEls + ' / 机制 ' + cx.mchEls + '）');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  const cxClosed = await page.evaluate(() => window.__Codex.isOpen());
+  ok(!cxClosed, '⑥c Esc 未收起图鉴');
+
+  const st = await page.evaluate(() => {
+    const b = document.querySelector('.menu button[data-settings]');
+    if (!b) return { found: false };
+    b.click();
+    const el = document.querySelector('#settings');
+    const info = (window.__Settings && window.__Settings.info) ? window.__Settings.info() : {};
+    return Object.assign({ found: true, on: !!(el && el.classList.contains('on')),
+                           sliders: el ? el.querySelectorAll('#settings input[type=range]').length : 0,
+                           sws: el ? el.querySelectorAll('#settings .sw').length : 0 }, info);
+  });
+  console.log('Settings = ' + JSON.stringify(st));
+  ok(st.found && st.on, '⑥c 点击后设置浮层未打开');
+  ok(st.sliders === 2, '⑥c 设置应有 2 条音量滑杆: ' + st.sliders);
+  ok(st.sws === 3, '⑥c 设置应有 3 个开关（静音 / 大字 / 减弱动效）: ' + st.sws);
+  ok(st.bgm === 0.60 && st.sfx === 0.50 && st.quality === 'high'
+     && st.big === false && st.motion === true,
+     '⑥c 设置默认值必须逐位等于现状（否则等于改门禁基线）: ' + JSON.stringify(st));
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  const stClosed = await page.evaluate(() => window.__Settings.isOpen());
+  ok(!stClosed, '⑥c Esc 未收起设置');
+
+  const callsAfter = await page.evaluate(() => window.__info().calls);
+  console.log('draw calls: ' + callsBefore + ' → ' + callsAfter);
+  ok(callsAfter === callsBefore,
+     '⑥c 开/关浮层改变了 draw calls（应为纯 DOM / 零 three 对象）: ' + callsBefore + ' → ' + callsAfter);
+  const ovl = await page.evaluate(() => window.__info().overlays);
+  ok(ovl && ovl.codex === false && ovl.settings === false && ovl.songsel === false,
+     '⑥c 浮层全部已关，状态应为 false: ' + JSON.stringify(ovl));
 
   /* ---------------- ⑦ 零报错 ---------------- */
   if (errs.length) { console.log('ERRORS:\n' + errs.join('\n')); fails.push(errs.length + ' 条控制台报错'); }
