@@ -205,6 +205,31 @@
   #cwres .bts b:hover{background:rgba(255,255,255,.22);transform:translateX(calc(4*var(--px)))}
   #cwres .bts b.pri{border-color:rgba(140,255,200,.72);background:rgba(140,255,200,.20);
     box-shadow:0 0 calc(30*var(--px)) rgba(140,255,200,.34)}
+  /* ---------------- P0 · 模块A 节拍条（跨场景可见节拍，纯 DOM / 零 draw call） ---------------- */
+  #beatbar{--px:calc(100vh / 941);position:fixed;left:50%;bottom:calc(20*var(--px));
+    transform:translateX(-50%);width:min(54vw,calc(620*var(--px)));z-index:11;pointer-events:none;
+    opacity:0;transition:opacity .25s ease}
+  #beatbar.on{opacity:1}
+  #beatbar .trk{position:relative;height:calc(9*var(--px));border-radius:calc(999*var(--px));
+    background:rgba(255,255,255,.10);box-shadow:inset 0 0 0 calc(1*var(--px)) rgba(255,255,255,.16);
+    overflow:hidden;transition:box-shadow .12s ease}
+  #beatbar .trk.near{box-shadow:inset 0 0 0 calc(1*var(--px)) rgba(140,255,200,.85),
+    0 0 calc(22*var(--px)) rgba(140,255,200,.45)}
+  #beatbar .trk u{position:absolute;top:0;bottom:0;width:calc(1*var(--px));background:rgba(255,255,255,.26)}
+  #beatbar .trk u.t0{left:0} #beatbar .trk u.t1{left:100%;transform:translateX(-100%)}
+  #beatbar .trk u.mid{left:50%;background:rgba(140,255,200,.55)}
+  #beatbar .trk i{position:absolute;top:calc(-4*var(--px));bottom:calc(-4*var(--px));left:0;
+    width:calc(3*var(--px));border-radius:calc(2*var(--px));background:#EAFBFF;
+    box-shadow:0 0 calc(12*var(--px)) rgba(234,251,255,.92);transform:translateX(-50%)}
+  #beatbar .pulse{position:absolute;left:50%;bottom:calc(20*var(--px));width:calc(14*var(--px));
+    height:calc(14*var(--px));border-radius:50%;background:#18E0FF;opacity:0;
+    box-shadow:0 0 calc(20*var(--px)) rgba(24,224,255,.85);transform:translateX(-50%) scale(.8)}
+  /* ---------------- P0 · Feedback 反馈浮字（跨场景判定飘字，纯 DOM） ---------------- */
+  #fdbk{--px:calc(100vh / 941);position:fixed;left:50%;bottom:calc(66*var(--px));z-index:11;pointer-events:none}
+  #fdbk .pop{position:absolute;left:0;bottom:0;transform:translate(-50%,0) scale(1);opacity:0;
+    font-size:calc(38*var(--px));font-weight:800;letter-spacing:.10em;white-space:nowrap;
+    text-shadow:0 calc(3*var(--px)) calc(16*var(--px)) rgba(0,0,0,.55)}
+  #fdbk .pop.perfect{color:#8CFFC8} #fdbk .pop.good{color:#FFE27A} #fdbk .pop.miss{color:#FF6B8A}
   .side{right:calc(66*var(--px));top:50%;transform:translateY(-50%);
     display:flex;flex-direction:column;gap:calc(22*var(--px))}
   .side b{width:calc(96*var(--px));height:calc(96*var(--px));border-radius:calc(26*var(--px));
@@ -2647,16 +2672,27 @@ function doJump(){
     jump.v = jump.perfect ? CFG.V0_PERFECT : CFG.V0;
     jump.on = true;
     m1Sfx(jump.perfect ? 'beatPerfect' : 'jump');
+    if (jump.perfect){ Feedback.pulse = 1; Feedback.pop('perfect', 'PERFECT'); }   /* P2·D3：踩点起跳可见反馈 */
   }
 }
+/* P1-模块B：四场景换道音效 —— 只能放「调用点」（共享模块 Lane 源码零改动，见长阶 §9.4）。
+   踩在拍上（BeatClock.inWindow）⇒ 高音 beatPerfect；否则 ⇒ 轻存在感音 cwLayer。 */
+function laneCue(){
+  if (BeatClock.inWindow()) m1Sfx('beatPerfect'); else m1Sfx('cwLayer');
+}
 
-/* 音频（保留音乐节拍逻辑） */
-var actx = null, master = null, nextBeat = 0, bpm = 118, beatCount = 0;
+/* 音频（保留音乐节拍逻辑）
+   P0-模块F 音频本体修复：
+     · 原 master 0.14 过低（kick 净幅度≈0.017，几乎听不见）⇒ 提到 0.5，让节拍/反馈可闻；
+     · 新增统一出口总线 outBus：SFX(master) 与 BGM(musicBus) 都汇入 outBus ⇒ 全局静音只切一处；
+     · 四场景节拍器升级为「4/4 小节」：下拍加重 + 低音 bass、反拍加 hi-hat（仍是纯 WebAudio，不涉渲染）。 */
+var actx = null, master = null, outBus = null, muted = false, nextBeat = 0, bpm = 118, beatCount = 0;
 function initAudio(){
   if (actx) return;
   try {
     actx = new (window.AudioContext || window.webkitAudioContext)();
-    master = actx.createGain(); master.gain.value = 0.14; master.connect(actx.destination);
+    outBus = actx.createGain(); outBus.gain.value = muted ? 0 : 1; outBus.connect(actx.destination);
+    master = actx.createGain(); master.gain.value = 0.5; master.connect(outBus);
     nextBeat = actx.currentTime + 0.1;
   } catch(e){ actx = null; }
   if (actx){
@@ -2665,19 +2701,30 @@ function initAudio(){
     if (BGM.want && !BGM.playing) BGM.start();
   }
 }
-function kick(t){
+/* 全局静音（键 M 切换）；outBus=0 ⇒ SFX 与 BGM 一起静音 */
+function setMute(v){ muted = !!v; if (outBus) outBus.gain.value = muted ? 0 : 1; return muted; }
+function toggleMute(){ return setMute(!muted); }
+function kick(t, g0){
   var o = actx.createOscillator(), g = actx.createGain();
   o.type = 'sine';
   o.frequency.setValueAtTime(140, t); o.frequency.exponentialRampToValueAtTime(46, t + 0.16);
-  g.gain.setValueAtTime(0.9, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+  g.gain.setValueAtTime(g0 == null ? 0.7 : g0, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
   o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.24);
+}
+/* 小节下拍低音（给四场景节拍器一点"音乐性"，非纯 click） */
+function bass(t){
+  var o = actx.createOscillator(), g = actx.createGain();
+  o.type = 'triangle';
+  o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(55, t + 0.30);
+  g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.34);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.36);
 }
 function hat(t){
   var b = actx.createBuffer(1, 1024, actx.sampleRate), d = b.getChannelData(0);
   for (var i = 0; i < 1024; i++) d[i] = (Math.random()*2 - 1)*(1 - i/1024);
   var n = actx.createBufferSource(); n.buffer = b;
   var hp = actx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 6400;
-  var g = actx.createGain(); g.gain.value = 0.12;
+  var g = actx.createGain(); g.gain.value = 0.15;
   n.connect(hp); hp.connect(g); g.connect(master); n.start(t);
 }
 function scheduleAudio(){
@@ -2685,7 +2732,10 @@ function scheduleAudio(){
   /* M3-CW：单赛道关由内置 BGM 接管节奏 ⇒ 停播既有 kick/hat（避免与 BGM 打架、避免谱面时钟错位） */
   if (LEVELS[cur] && LEVELS[cur].mode === 'single-track') return;
   while (nextBeat < actx.currentTime + 0.18){
-    kick(nextBeat); if (beatCount % 2 === 1) hat(nextBeat);
+    var bar = beatCount % 4;
+    kick(nextBeat, bar === 0 ? 1.0 : 0.6);       /* 下拍加重 */
+    if (bar === 0) bass(nextBeat);               /* 每小节首拍低音 */
+    if (beatCount % 2 === 1) hat(nextBeat);      /* 反拍 hi-hat */
     beatCount++; nextBeat += 60/bpm;
     BeatClock.onKick();   /* §7.5-7：在 kick 处广播 beat，供踩点窗口对齐 */
   }
@@ -2702,7 +2752,7 @@ renderer.domElement.addEventListener('pointerdown', function(e){
   var S = SCN[cur];
   if (!S || !S.runnable) return;                 /* 仅可玩关响应 */
   if (isCw()){ CWInput.press(); return; }        /* M3-CW：按下待判（轻点→升/降，长按→同调） */
-  Lane.request(e.clientX < innerWidth / 2 ? -1 : 1, cur);
+  if (Lane.request(e.clientX < innerWidth / 2 ? -1 : 1, cur)) laneCue();   /* P1·B：换道音（调用点） */
 });
 /* pointerup/cancel 挂 window：指针移出画布也能正确收尾；CWInput 内部有状态守卫，重复调用无副作用 */
 addEventListener('pointerup', function(e){ if (isCw()) CWInput.release(e.clientY < innerHeight / 2 ? 1 : -1); });
@@ -2718,8 +2768,8 @@ addEventListener('keydown', function(e){
     if (e.code === 'Space' || e.code === 'ArrowUp'){ e.preventDefault(); doJump(); }
     /* M3-OP：键盘换道（← → / A D）；长按不重复触发（e.repeat 守卫） */
     if (!e.repeat){
-      if (e.code === 'ArrowLeft'  || e.code === 'KeyA'){ e.preventDefault(); Lane.request(-1, cur); }
-      if (e.code === 'ArrowRight' || e.code === 'KeyD'){ e.preventDefault(); Lane.request( 1, cur); }
+      if (e.code === 'ArrowLeft'  || e.code === 'KeyA'){ e.preventDefault(); if (Lane.request(-1, cur)) laneCue(); }
+      if (e.code === 'ArrowRight' || e.code === 'KeyD'){ e.preventDefault(); if (Lane.request( 1, cur)) laneCue(); }
     }
   }
   if (e.key === '1') setScene('home');
@@ -2728,6 +2778,7 @@ addEventListener('keydown', function(e){
   if (e.key === '4') setScene('base');
   if (e.key === '5') setScene('causeway');
   if (e.key === 'f' || e.key === 'F') M1.interact();
+  if (e.key === 'm' || e.key === 'M'){ if (!actx) initAudio(); toggleMute(); }   /* P0-模块F：全局静音开关 */
 });
 addEventListener('keyup', function(e){
   Input.keys[e.code] = false;
@@ -2742,7 +2793,7 @@ var T = 0, last = performance.now();
 function updateScene(k, dt){
   var S = SCN[k]; if (!S) return;
   var sc = S.scene;
-  if (sc.userData.beam){ var s2 = 1 + Math.sin(T*1.1)*0.035; sc.userData.beam.scale.set(s2, 1, s2); }
+  if (sc.userData.beam){ var s2 = (1 + Math.sin(T*1.1)*0.035) * (1 + 0.05*Feedback.pulse); sc.userData.beam.scale.set(s2, 1, s2); }   /* P1·C：光柱随节拍脉动 */
   var wf = sc.userData.wf;
   if (wf && wf.userData.mist){
     wf.userData.mist.position.y = -0.35 + Math.sin(T*1.7)*0.3;
@@ -2826,7 +2877,8 @@ function updateScene(k, dt){
     /* A13 相位去同步：未显式赋相位的晶簇（占绝大多数）改为「由世界坐标导出相位」，
        零随机数、零存储，使原本 phase=0 而整齐同步脉动的晶簇各自错峰呼吸。 */
     if (cp == null) cp = c.position.x*0.7 + c.position.y*0.9 + c.position.z*0.6;
-    var s3 = 1 + Math.sin(T*1.6 + cp)*0.035;
+    /* P1·C：叠一层节拍脉动 —— 音乐晶体随拍"呼吸"（Feedback.pulse 在 freeze 下恒为 0 ⇒ 定帧零漂移） */
+    var s3 = (1 + Math.sin(T*1.6 + cp)*0.035) * (1 + 0.030*Feedback.pulse);
     c.scale.setScalar(s3 * (c.userData.baseScale || 1));
   }
   var mts = sc.userData.motes;
@@ -2914,6 +2966,8 @@ function loop(now){
           CWResult.tick(dt);                         /* M3-CW·P5：曲终 → 弹出结算面板 */
         }
         RhythmHUD.update(dt);                      /* M3-CW：音游浮层（仅 causeway 显示时写 DOM） */
+        BeatBar.update(dt);                        /* P0·A：跨场景节拍条（非 causeway 也可见） */
+        Feedback.tick(dt);                         /* P0：判定飘字 / 脉动衰减 */
       }
       updateScene(cur, dt);
       renderer.setViewport(0, 0, innerWidth, innerHeight);
@@ -3222,7 +3276,10 @@ var BeatClock = {
     if (LEVELS[cur] && LEVELS[cur].mode === 'single-track' && BGM.playing){
       var sp = BGM.songT();
       BeatClock.phase = (((sp % bp) + bp) % bp) / bp;
-      BeatClock.index = Math.floor(sp / bp);
+      var cwIdx = Math.floor(sp / bp);
+      /* P1·E（修 D6）：causeway 无 kick 调度 ⇒ 此处按索引变化自算并广播 beat，
+         让节拍条 / 画面脉动在音游关同样生效（原"音游关与节拍时钟脱钩"） */
+      if (cwIdx !== BeatClock.index){ BeatClock.index = cwIdx; Bus.emit('beat', { index: cwIdx, strong: true }); }
       return;
     }
     if (actx && actx.state === 'running'){
@@ -3238,10 +3295,12 @@ var BeatClock = {
   tap: function(){ Bus.emit('beatTap', {}); }
 };
 
-/* ---- 局内 SFX（GDD §6.6，汇入既有 master，不随 bpm 变速）---- */
-function m1Sfx(kind){
+/* ---- 局内 SFX（GDD §6.6，汇入既有 master，不随 bpm 变速）----
+   P1-模块D：新增 step 参数（半音），让「命中音」随连击升格变音高 ⇒ 听觉可感知连击。 */
+function m1Sfx(kind, step){
   if (!actx) return;
   var t = actx.currentTime;
+  var mul = Math.pow(2, (step || 0) / 12);   /* step 半音 → 频率倍率 */
   try {
     function tone(type, f0, f1, dur, vol){
       var o = actx.createOscillator(), g = actx.createGain();
@@ -3260,16 +3319,22 @@ function m1Sfx(kind){
         o.connect(g); g.connect(master); o.start(t + i*0.06); o.stop(t + i*0.06 + 0.24);
       }
     }
-    else if (kind === 'beatPerfect') tone('square', 1760, 1760, 0.08, 0.32);
+    else if (kind === 'beatPerfect') tone('square', 1760*mul, 1760*mul, 0.08, 0.32);
     else if (kind === 'jump')        tone('sine', 320, 620, 0.12, 0.20);
     else if (kind === 'land')        tone('sine', 160, 70, 0.14, 0.24);
     else if (kind === 'portalGo')    tone('sawtooth', 220, 1320, 0.55, 0.26);
     else if (kind === 'uiClick')     tone('triangle', 880, 880, 0.06, 0.16);
-    /* M3-CW ·《超频长阶》判定音（与 BGM 并行、走 SFX 总线，故音量压低避免盖住音乐） */
-    else if (kind === 'cwHit')       tone('square',   1320, 1320, 0.07, 0.22);
-    else if (kind === 'cwGood')      tone('triangle',  988,  988, 0.07, 0.18);
-    else if (kind === 'cwOrb')       tone('triangle', 1568, 2093, 0.10, 0.20);
+    /* M3-CW ·《超频长阶》判定音（与 BGM 并行、走 SFX 总线，故音量压低避免盖住音乐）
+       P1-模块D：命中音随连击升格（mul）；Good 略低于 Perfect，形成"音阶上行" */
+    else if (kind === 'cwHit')       tone('square',   1320*mul, 1320*mul, 0.07, 0.22);
+    else if (kind === 'cwGood')      tone('triangle',  988*mul,  988*mul, 0.07, 0.18);
+    else if (kind === 'cwOrb')       tone('triangle', 1568*mul, 2093*mul, 0.10, 0.20);
     else if (kind === 'cwMiss')      tone('sawtooth',  190,   95, 0.16, 0.20);
+    /* P1-模块B：换道 / 换层「存在感」音（非命中，故音量更轻；踩拍时改用 beatPerfect/cwHit） */
+    else if (kind === 'cwLayer')     tone('triangle',  520*mul, 680*mul, 0.08, 0.13);
+    /* P1-模块E：音乐理解「听得见」—— 预判窗口开启 / 段落镜头切换 的听觉提示 */
+    else if (kind === 'cwAntOpen')   tone('triangle',  988*mul, 1480*mul, 0.16, 0.14);
+    else if (kind === 'cwLens')      tone('sine',     1318*mul, 1568*mul, 0.14, 0.11);
   } catch(e){}
 }
 
@@ -3286,7 +3351,9 @@ function m1Sfx(kind){
 var musicBus = null, bgmSrc = null, bgmBuf = null, bgmAB = null, bgmT0 = 0;
 function initMusicBus(){
   if (musicBus || !actx) return;
-  musicBus = actx.createGain(); musicBus.gain.value = 0.60; musicBus.connect(actx.destination);
+  /* P0-模块F：汇入统一出口总线 outBus（而非直接 destination）⇒ 与 master 同受全局静音；音量口径统一。
+     outBus 在 initAudio 中先于本函数创建；兜底 destination 以防极端时序。 */
+  musicBus = actx.createGain(); musicBus.gain.value = 0.60; musicBus.connect(outBus || actx.destination);
 }
 function loadBGM(){
   if (bgmBuf || bgmAB || loadBGM._l) return;
@@ -3367,8 +3434,8 @@ var btnRes = null;
 var CWInput = {
   HOLD_MS: 220, _down: false, _timer: null, resonating: false,
   _audio: function(){ initAudio(); if (actx && actx.state === 'suspended') actx.resume(); },
-  lift: function(){ CWInput._audio(); Track.request(+1, cur); },
-  dive: function(){ CWInput._audio(); Track.request(-1, cur); },
+  lift: function(){ CWInput._audio(); if (Track.request(+1, cur)) Feedback.onBeatSwitch(); },   /* P1·B：踩拍换层 */
+  dive: function(){ CWInput._audio(); if (Track.request(-1, cur)) Feedback.onBeatSwitch(); },   /* P1·B：踩拍换层 */
   press: function(){
     CWInput._audio();
     CWInput._down = true;
@@ -3443,21 +3510,21 @@ var Judge = {
     o.grade = grade;
     o.fxT = 0.34;                                   /* 命中/失误的缩放脉冲 */
     if (grade === 'miss') m1Sfx('cwMiss');
-    else if (o.type === 'orb') m1Sfx('cwOrb');
-    else m1Sfx(grade === 'perfect' ? 'cwHit' : 'cwGood');
+    else if (o.type === 'orb') m1Sfx('cwOrb', Math.min(7, Math.floor(CWScore.combo / 8)));
+    else Feedback.sfx(grade, CWScore.combo);        /* P2·D4：闸门命中音随连击升格（原音高恒定） */
     CWScore.hit(grade, base);
   }
 };
 
 var CWScore = {
   perfect: 0, good: 0, miss: 0, combo: 0, maxCombo: 0, score: 0,
-  orbs: 0, orbMiss: 0, decoy: 0,
+  orbs: 0, orbMiss: 0, decoy: 0, onBeat: 0,
   mult: 1,        /* P4 同调倍率（1.0 + 0.5 × 同调达成率） */
   amo: 1,         /* P4 预判倍率（押对 ×1.5 / 其余 ×1.0） —— 本段内有效 */
   reset: function(){
     CWScore.perfect = CWScore.good = CWScore.miss = 0;
     CWScore.combo = CWScore.maxCombo = CWScore.score = 0;
-    CWScore.orbs = CWScore.orbMiss = CWScore.decoy = 0;
+    CWScore.orbs = CWScore.orbMiss = CWScore.decoy = 0; CWScore.onBeat = 0;
     CWScore.mult = 1; CWScore.amo = 1;
   },
   comboMult: function(){ return 1 + Math.min(CWScore.combo, 50) / 50 * 0.5; },
@@ -3471,6 +3538,13 @@ var CWScore = {
       CWScore.score += Math.round(b * CWScore.comboMult() * CWScore.mult * CWScore.amo);
     }
     RhythmHUD.flash(grade);
+  },
+  /* P1-模块B：踩拍换层（压线切）——只加成、不惩罚：加连击 + 少量分 + 计 onBeat */
+  beatOn: function(){
+    CWScore.onBeat++;
+    CWScore.combo++;
+    if (CWScore.combo > CWScore.maxCombo) CWScore.maxCombo = CWScore.combo;
+    CWScore.score += Math.round(10 * CWScore.comboMult() * CWScore.mult * CWScore.amo);
   },
   accuracy: function(){
     var tot = CWScore.perfect + CWScore.good + CWScore.miss;
@@ -3535,6 +3609,8 @@ var CWAnt = {
     var a = L[CWAnt.idx];
     if (!CWAnt.open && a && t >= a.at && t < a.at + a.win){
       CWAnt.open = true; CWAnt.bet = false; CWAnt.cur = a;
+      m1Sfx('cwAntOpen');                            /* P1·E：窗口开启的听觉提示（原仅视觉） */
+      Bus.emit('cw:antOpen', { dir: a.dir });        /* P1·E：打通死事件 → 画面短促脉动 */
     }
     /* ③ 押注：窗口内出现「同调长按」即 latch（§6.1 玩家操作 = 长按同调完成押注） */
     if (CWAnt.open && !CWAnt.bet && CWInput.resonating) CWAnt.bet = true;
@@ -3674,7 +3750,7 @@ var CWResult = {
       maxCombo: CWScore.maxCombo, perfect: CWScore.perfect, good: CWScore.good, miss: CWScore.miss,
       orbs: CWScore.orbs, orbTotal: RhythmHUD._orbTotal || 0, decoy: CWScore.decoy,
       resoPerfect: CWReso.perfect, resoTotal: CWReso.total, mult: +CWScore.mult.toFixed(3),
-      antOk: CWAnt.okCount, antTotal: CWAnt.settled };
+      antOk: CWAnt.okCount, antTotal: CWAnt.settled, onBeat: CWScore.onBeat };
   },
   fill: function(r){
     var q = CWResult._q;
@@ -3687,7 +3763,8 @@ var CWResult = {
     q.res.textContent = '×' + r.mult.toFixed(2);
     q.judges.innerHTML = '<span class="p">PERFECT ' + r.perfect + '</span> · ' +
       '<span class="g">GOOD ' + r.good + '</span> · <span class="m">MISS ' + r.miss + '</span>';
-    q.ant.textContent = '预判 ' + r.antOk + '/' + r.antTotal + ' · 同调 ' + r.resoPerfect + '/' + r.resoTotal;
+    q.ant.textContent = '预判 ' + r.antOk + '/' + r.antTotal + ' · 同调 ' + r.resoPerfect + '/' + r.resoTotal +
+                        (r.onBeat ? ' · 踩拍 ' + r.onBeat : '');   /* P2：踩拍（压线切）计数可视化 */
   },
   tick: function(dt){
     if (CWResult.open) return;
@@ -3972,6 +4049,114 @@ var RhythmHUD = {
     }
   }
 };
+
+/* ==========================================================================
+   P0 · 模块A 节拍条 BeatBar —— 跨场景「可见节拍」，纯 DOM / 零 draw call
+   --------------------------------------------------------------------------
+   为什么：原玩法只有声音节拍，玩家"看不见拍在哪"。本浮层把 BeatClock.phase
+   画成一条扫掠条 + 两端判定刻度：扫描线由左(0)扫到右(1)即一拍，接近两端
+   （BeatClock.inWindow）时整条高亮、beat 事件脉冲一次 ⇒ 节拍成为可见的时间轴。
+   · 只在「非 SHOWCASE 且非 FREEZE 的可玩场景」显示 ⇒ 不动定帧画面、不进四宫格。
+   · 每帧只写 transform/opacity（零重排），不新增任何 three 对象。
+   ========================================================================== */
+var BeatBar = {
+  el: null, _q: null, _on: false, _near: null, _pulse: 0,
+  ensure: function(){
+    if (BeatBar.el) return BeatBar.el;
+    var d = document.createElement('div'); d.id = 'beatbar';
+    d.innerHTML =
+      '<div class="trk"><u class="t0"></u><u class="mid"></u><u class="t1"></u><i></i></div>' +
+      '<b class="pulse"></b>';
+    document.body.appendChild(d);
+    BeatBar.el = d;
+    BeatBar._q = { trk: d.querySelector('.trk'), scan: d.querySelector('.trk i'), pulse: d.querySelector('.pulse') };
+    return d;
+  },
+  show: function(on){
+    if (!on && !BeatBar.el) return;
+    BeatBar.ensure().classList.toggle('on', !!on);
+    BeatBar._on = !!on;
+    if (!on){ BeatBar._pulse = 0; BeatBar._near = null; }
+  },
+  bump: function(){ BeatBar._pulse = 0.22; },
+  update: function(dt){
+    var d = BeatBar.el; if (!d || !BeatBar._on) return;
+    var q = BeatBar._q;
+    q.scan.style.left = (BeatClock.phase * 100).toFixed(2) + '%';
+    var near = BeatClock.inWindow();
+    if (near !== BeatBar._near){ BeatBar._near = near; q.trk.classList.toggle('near', near); }
+    if (BeatBar._pulse > 0){
+      BeatBar._pulse = Math.max(0, BeatBar._pulse - dt);
+      var k = BeatBar._pulse / 0.22;
+      q.pulse.style.opacity = (0.95 * k).toFixed(2);
+      q.pulse.style.transform = 'translateX(-50%) scale(' + (0.8 + 1.0 * k).toFixed(2) + ')';
+    } else if (q.pulse.style.opacity !== '0'){ q.pulse.style.opacity = '0'; }
+  }
+};
+Bus.on('beat', function(){ BeatBar.bump(); if (Feedback.pulse < 0.7) Feedback.pulse = 0.7; });   /* P1·C：节拍驱动画面脉动 */
+Bus.on('beatTap', function(){ BeatBar.bump(); });
+
+/* ==========================================================================
+   P0 · Feedback 反馈总线 —— 统一「判定/命中 → 视听升格」的三路出口
+   --------------------------------------------------------------------------
+   目的：避免每处判定各写一份 DOM/SFX/脉动。玩法命中共走 Feedback.judge()：
+     · 视觉：底部居中判定飘字（纯 DOM，惰性创建）
+     · 听觉：m1Sfx 按 combo 升格变音高（P1 模块D）
+     · 画面：置 Feedback.pulse（0..1 衰减），供 P1 模块C 对"已有材质"做逐帧自发光脉动
+   零新增 three 对象；SHOWCASE / FREEZE 下不创建飘字层。
+   ========================================================================== */
+var Feedback = {
+  pulse: 0, _popT: 0, _layer: null, _pop: null,
+  _ensure: function(){
+    if (Feedback._layer) return;
+    var d = document.createElement('div'); d.id = 'fdbk';
+    d.innerHTML = '<b class="pop"></b>';
+    document.body.appendChild(d);
+    Feedback._layer = d; Feedback._pop = d.querySelector('.pop');
+  },
+  /* 纯视觉飘字（不发声，供已有独立 SFX 的场合叠加，如踩点起跳） */
+  pop: function(kind, text){
+    if (SHOWCASE || FREEZE) return;
+    Feedback._ensure();
+    if (Feedback._pop){
+      Feedback._pop.textContent = text || (kind === 'perfect' ? 'PERFECT' : kind === 'good' ? 'GOOD' : 'MISS');
+      Feedback._pop.className = 'pop ' + kind;
+      Feedback._popT = 0.5;
+    }
+  },
+  /* kind: 'perfect' | 'good' | 'miss'；combo: 连击数（用于音高升格）；text 可覆盖飘字 */
+  judge: function(kind, combo, text){
+    if (kind !== 'miss') Feedback.pulse = 1;
+    Feedback.sfx(kind, combo);
+    Feedback.pop(kind, text);
+  },
+  /* 连击升格：每 8 连升 1 个半音，封顶 7（避免尖锐） */
+  sfx: function(kind, combo){
+    var step = Math.min(7, Math.floor((combo || 0) / 8));
+    if (kind === 'perfect') m1Sfx('cwHit', step);
+    else if (kind === 'good') m1Sfx('cwGood', step);
+    else m1Sfx('cwMiss');
+  },
+  /* P1-模块B：causeway 换层「踩拍」——压线切（节拍窗口内）= ON BEAT：加分/加连击 + 飘字 + 脉动；
+     不在拍上 ⇒ 轻存在感音 cwLayer（无奖励、无惩罚）。只奖励踩中，不惩罚失手。 */
+  onBeatSwitch: function(){
+    if (BeatClock.inWindow()){ CWScore.beatOn(); Feedback.judge('perfect', CWScore.combo, 'ON BEAT'); }
+    else m1Sfx('cwLayer');
+  },
+  reset: function(){ Feedback.pulse = 0; Feedback._popT = 0; if (Feedback._pop) Feedback._pop.style.opacity = '0'; },
+  tick: function(dt){
+    if (Feedback.pulse > 0) Feedback.pulse = Math.max(0, Feedback.pulse - dt / 0.30);
+    if (Feedback._popT > 0 && Feedback._pop){
+      Feedback._popT -= dt;
+      var k = Feedback._popT / 0.5;
+      Feedback._pop.style.opacity = k > 0 ? Math.min(1, k * 1.7).toFixed(2) : '0';
+      Feedback._pop.style.transform = 'translate(-50%,0) scale(' + (1.02 - 0.10 * (1 - k)).toFixed(2) + ')';
+    }
+  }
+};
+/* P1-模块E：打通「死事件」 —— 让音乐理解在游戏中可感知（原事件有发射、无订阅） */
+Bus.on('cw:lens', function(){ m1Sfx('cwLens'); });                                   /* 段落镜头切换 → 听觉提示 */
+Bus.on('cw:antOpen', function(){ if (Feedback.pulse < 0.9) Feedback.pulse = 0.9; }); /* 预判窗口开启 → 画面短促脉动 */
 
 /* ---- 地面波纹（落地 / 收集反馈，GDD §5.2）---- */
 function groundRipple(){
@@ -4364,6 +4549,7 @@ var M1 = {
     Track.reset(k);                  /* M3-CW：回到 Lo 层、清空同调/缓冲/俯仰 */
     CWInput.reset();                 /* M3-CW：清「轻点待判 / 同调长按」状态 */
     CWResult.reset();                /* M3-CW·P5：切场景即关结算面板（含「返回枢纽」路径） */
+    Feedback.reset();                /* P0：清判定飘字 / 脉动 */
     if (k === 'causeway'){
       Chart.load(); BGM.start();     /* M3-CW：加载真值谱面 + 起播 BGM（待首个用户手势） */
       CWScore.reset();
@@ -4376,6 +4562,8 @@ var M1 = {
       BGM.stop();                    /* 离开单赛道关 → 停 BGM（其余关沿用内置 kick/hat） */
       RhythmHUD.show(false);
     }
+    /* P0·A：跨场景节拍条随场景显隐（仅非 SHOWCASE / 非定帧的可玩场景才显示） */
+    BeatBar.show(!SHOWCASE && !FREEZE && !!(SCN[k] && SCN[k].runnable));
     var S = SCN[k], sd = (S && S.scene) ? S.scene.userData : null;
     if (sd && sd.gems){
       for (var i = 0; i < sd.gems.length; i++){
@@ -4462,6 +4650,7 @@ window.__cwSeek = function(t){
   CWAnt.reset(t);                              /* M3-CW·P4：预判游标随时刻前移 */
   CWReso.reset(t);                             /* M3-CW·P4：同调游标随时刻前移（早于 t 的长音不计） */
   CWResult.reset();                            /* M3-CW·P5：关结算面板（seek 后不残留旧战绩） */
+  Feedback.reset();                            /* P1：清飘字 / 脉动（seek 后画面干净） */
   RhythmHUD.ensure();
   return true;
 };
