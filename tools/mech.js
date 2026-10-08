@@ -16,7 +16,9 @@
      ⑤b 运行时机制（P2）：M1 副歌开闸（进副歌 over=1.5 / 出副歌回落）／M2 Drop 俯冲（进 climax
         触发 + 标记段内首个双闸门）／M5 旋律航线（lane 非空 + 同航线 ×1.25）／M6 用跑道弹琴
         （各段音区不同且落在 [−5,7]）。
+     ⑤c M5 旋律航线带（P4）：causeway 非定帧下航线带已挂载且段数 = 小节数。
      ⑥ SongSelect 浮层：可由枢纽「选择歌曲」打开、Esc 收起，且不产生 three 对象。
+     ⑥b 定帧保护：FREEZE 下航线带不挂载（children 不增，护住 causeway 定帧基线）。
      ⑦ 零 console / pageerror。
    任一不满足 → process.exit(1)。
    用法: node tools/mech.js
@@ -236,6 +238,13 @@ const GOLD = { track: 'superweave', chart: 'assets/causeway-chart.json', bgm: 'a
   ok(sawLane != null, '⑤b M5 旋律航线从未产生（lane 恒 null）');
   ok(laneHit >= 1, '⑤b M5 与航线同层未给 ×1.25（laneOn / harmMult 未生效）');
 
+  /* ---------------- ⑤c M5 旋律航线带几何（P4） ---------------- */
+  console.log('=== ⑤c M5 旋律航线带（可视化）===');
+  const lane3d = await page.evaluate(() => window.__info().cw.lane3d);
+  console.log('lane3d = ' + JSON.stringify(lane3d));
+  ok(lane3d && lane3d.mounted === true, '⑤c M5 航线带未挂载（causeway 非定帧下应挂载）');
+  ok(lane3d && lane3d.bars >= 60, '⑤c M5 航线带段数异常（应为 小节数）: ' + (lane3d && lane3d.bars));
+
   /* ---------------- ⑥ SongSelect 浮层 ---------------- */
   console.log('=== ⑥ SongSelect 浮层 ===');
   await page.evaluate(() => window.__setScene('home'));
@@ -263,6 +272,17 @@ const GOLD = { track: 'superweave', chart: 'assets/causeway-chart.json', bgm: 'a
     return { on: !!(el && el.classList.contains('on')) };
   });
   ok(!closed.on, '⑥ Esc 未收起浮层');
+
+  /* ---------------- ⑥b 航线带定帧保护（FREEZE 下不挂载） ---------------- */
+  console.log('=== ⑥b M5 航线带 · 定帧保护 ===');
+  const fp = await browser.newPage({ viewport: { width: 836, height: 470 }, deviceScaleFactor: 1 });
+  await fp.goto(URL + '?scene=causeway&freeze=1', { waitUntil: 'load', timeout: 60000 });
+  await fp.waitForTimeout(2600);
+  const fl3d = await fp.evaluate(() => (window.__info ? window.__info().cw.lane3d : null));
+  const fchildren = await fp.evaluate(() => window.__SCN.causeway.scene.children.length);
+  await fp.close();
+  console.log('FREEZE lane3d = ' + JSON.stringify(fl3d) + '  causeway children=' + fchildren);
+  ok(fl3d && fl3d.mounted === false, '⑥b FREEZE 下航线带仍被挂载（定帧 children 会漂移）');
 
   /* ---------------- ⑦ 零报错 ---------------- */
   if (errs.length) { console.log('ERRORS:\n' + errs.join('\n')); fails.push(errs.length + ' 条控制台报错'); }

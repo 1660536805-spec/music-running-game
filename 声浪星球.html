@@ -3029,6 +3029,7 @@ function loop(now){
           Track.update(dt, cur);                     /* M3-CW：单赛道升降层插值（causeway 专用） */
           if (Track.isCw(cur)) CWMech.update(dt);    /* P2：运行时机制（M5 航线乘区 + M1/M2 表现层刷新，置于判定前 ⇒ 同帧生效） */
           Obstacle.update(dt, cur, SCN[cur]);        /* M3-CW：谱面→障碍生成 / 掠过判定 / 回收 */
+          if (Track.isCw(cur)) MelodyLane.update();  /* P4：M5 航线带（谱面变化重烘焙 + 同层点亮）*/
           PlayerController.update(dt, cur, SCN[cur]);
           Collectible.update(dt, cur, SCN[cur]);
           Portal.update(dt, cur, SCN[cur]);
@@ -4589,6 +4590,108 @@ var Obstacle = {
 };
 
 /* ==========================================================================
+   P4 · M5 旋律航线（MelodyLane）—— 跑道上"看得见"的旋律走向
+   --------------------------------------------------------------------------
+   为什么需要它：M5 的乘区（与航线同层 ×1.25）此前只有 HUD 一枚 chip 提示；玩家
+   在赛道上**看不见航线在哪一层**。本模块把 chart.melody.slope（八分音符级音高斜率，
+   生成器真值）烘焙成一条贴跑道的发光航线带：旋律上行 ⇒ 航线抬到 hi 层，下行 ⇒ 压回
+   lo 层。玩家一眼看到"下一段该走高层还是低层" ⇒ M5 从"隐藏加成"变成"可读路标"。
+
+   ▸ 纯烘焙几何：整首歌一次建成（每小节一段，0..bars），运行期只在"谱面变化 / 航线
+     点亮"时写 material 参数 ⇒ 零 per-frame 顶点更新、恒定 1 个 draw call。
+   ▸ 定帧保护：mount() 内 `if (FREEZE) return`（照抄 Obstacle.mount 双保险）⇒ 四场景
+     定帧与 causeway 定帧 children / calls / tris 均不变。
+   ▸ 随机流纪律：细微明暗抖动一律走 dseq(0xC0A5E7) 独立流（与生成器同族记号），
+     零全局 rnd() ⇒ 不扰动任何既有随机序列。
+   ========================================================================== */
+var MelodyLane = {
+  W: 0.90,                  /* 航线带宽 */
+  Y_LO: 0.05, Y_HI: 0.95,   /* 贴地 / 抬到 hi 层（CW.LAYER_HI 0.9 + 0.05）*/
+  TH: 0.30,                 /* 与 CWMech.LANE_TH 同口径：±0.30 可辨 */
+  C_LO: 0x18E0FF, C_HI: 0xFF4FD8,
+  root: null, mesh: null, mounted: false, _sig: '', _on: null,
+
+  mount: function(){
+    if (MelodyLane.mounted || FREEZE) return;          /* FREEZE 下不挂载 ⇒ 定帧零影响 */
+    var S = SCN.causeway; if (!S || !S.scene) return;
+    MelodyLane.root = new THREE.Group(); MelodyLane.root.name = 'cwMelodyLane';
+    S.scene.add(MelodyLane.root);
+    MelodyLane.mounted = true;
+    MelodyLane.build(true);
+  },
+  /* 航线层：与 CWMech.updateLane 同读法（±TH 阈值 + 保持不变），此处离线按整小节取均值 */
+  laneOfBar: function(slope, bar, prev){
+    var b0 = bar * 8, s = 0, n = 0;
+    for (var k = b0; k < b0 + 8 && k < slope.length; k++){ s += slope[k]; n++; }
+    var avg = n ? s / n : 0;
+    return (avg > MelodyLane.TH) ? 'hi' : (avg < -MelodyLane.TH) ? 'lo' : prev;
+  },
+  build: function(force){
+    if (!MelodyLane.mounted) return;
+    var ch = Chart.data;
+    if (!ch || !ch.melody || !ch.melody.slope || !ch.melody.slope.length) return;   /* 谱面未就绪 ⇒ 下帧重试 */
+    var sig = (ch.song || '') + ':' + (ch.bars || 0) + ':' + ch.melody.slope.length;
+    if (!force && sig === MelodyLane._sig) return;
+    var slope = ch.melody.slope, bars = ch.bars || Math.floor(slope.length / 8);
+    var BAR = ch.bar || 1.52, R = dseq(0xC0A5E7);
+    var n = bars + 1, pos = new Float32Array(n * 2 * 3), col = new Float32Array(n * 2 * 3);
+    var cLo = new THREE.Color(MelodyLane.C_LO), cHi = new THREE.Color(MelodyLane.C_HI);
+    var lane = 'lo';
+    for (var i = 0; i <= bars; i++){
+      lane = MelodyLane.laneOfBar(slope, Math.min(i, bars - 1), lane);
+      var t = i * BAR, z = Track.zOf(t);
+      if (z > CW.Z_START) z = CW.Z_START;
+      if (z < CW.Z_END + 2) z = CW.Z_END + 2;
+      var y = (lane === 'hi') ? MelodyLane.Y_HI : MelodyLane.Y_LO;
+      var c = (lane === 'hi') ? cHi : cLo;
+      var jit = 0.78 + 0.22 * R();                     /* 独立随机流的细微明暗抖动 */
+      for (var sI = 0; sI < 2; sI++){
+        var o = (i * 2 + sI) * 3;
+        pos[o] = (sI === 0 ? -1 : 1) * MelodyLane.W / 2; pos[o + 1] = y; pos[o + 2] = z;
+        col[o] = c.r * jit; col[o + 1] = c.g * jit; col[o + 2] = c.b * jit;
+      }
+    }
+    var idx = [];
+    for (var q = 0; q < bars; q++){
+      var a = q * 2, b = q * 2 + 1, c2 = (q + 1) * 2, d = (q + 1) * 2 + 1;
+      idx.push(a, c2, b, b, c2, d);
+    }
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    geo.setIndex(idx);
+    if (!MelodyLane.mesh){
+      var mat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.42,
+        blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide });
+      MelodyLane.mesh = new THREE.Mesh(geo, mat);
+      MelodyLane.mesh.frustumCulled = false;            /* 长条带跨整个视距 ⇒ 关剔除防误裁 */
+      MelodyLane.root.add(MelodyLane.mesh);
+    } else {
+      MelodyLane.mesh.geometry.dispose();
+      MelodyLane.mesh.geometry = geo;
+    }
+    MelodyLane._sig = sig; MelodyLane._on = null;       /* 强制下一帧刷新点亮态 */
+  },
+  /* 每帧：谱面变化则重烘焙；与航线同层则点亮（纯 material 参数写入，零几何改动） */
+  update: function(){
+    if (!MelodyLane.mounted) return;
+    var ch = Chart.data;
+    var sig = ch ? ((ch.song || '') + ':' + (ch.bars || 0) + ':' + (ch.melody ? ch.melody.slope.length : 0)) : '';
+    if (sig && sig !== MelodyLane._sig) MelodyLane.build(true);
+    if (!MelodyLane.mesh) return;
+    var on = !!(typeof CWMech !== 'undefined' && CWMech.laneOn);
+    if (on !== MelodyLane._on){
+      MelodyLane._on = on;
+      MelodyLane.mesh.material.opacity = on ? 0.90 : 0.42;
+    }
+  },
+  info: function(){
+    return { mounted: MelodyLane.mounted, on: MelodyLane._on,
+             bars: MelodyLane.mesh ? (MelodyLane.mesh.geometry.index.count / 6) : 0 };
+  }
+};
+
+/* ==========================================================================
    M3-CW · 音游 HUD（RhythmHUD）—— 惰性浮层，仅 causeway 显示
    --------------------------------------------------------------------------
    仿 HUD._flash 的惰性策略：首次进入 causeway 才建 DOM；每帧只写文本/类名，零重排。
@@ -5184,6 +5287,7 @@ var M1 = {
       CWAnt.reset();                 /* M3-CW·P4：清预判窗口 / 押注 / amo */
       CWReso.reset();                /* M3-CW·P4：清同调长音判定 / mult */
       Obstacle.mount(); Obstacle.reset();   /* FREEZE 下 mount 内部自会跳过 ⇒ 定帧 children 不变 */
+      MelodyLane.mount();                   /* P4：M5 航线带（同 FREEZE 保护）*/
       RhythmHUD.show(true);
     } else {
       BGM.stop();                    /* 离开单赛道关 → 停 BGM（其余关沿用内置 kick/hat） */
@@ -5275,6 +5379,7 @@ window.__cwSeek = function(t){
   if (BGM.playing && actx) bgmT0 = actx.currentTime - t;
   CWScore.reset();
   Obstacle.mount(); Obstacle.seek(t);
+  MelodyLane.mount(); MelodyLane.update();    /* P4：M5 航线带随 seek 重烘焙 */
   Lens.snapForTime(t);                         /* M3-CW·P4：镜头按时刻直接落位 */
   CWAnt.reset(t);                              /* M3-CW·P4：预判游标随时刻前移 */
   CWReso.reset(t);                             /* M3-CW·P4：同调游标随时刻前移（早于 t 的长音不计） */
@@ -5359,6 +5464,7 @@ window.__info = function(){
                       mult: +CWScore.mult.toFixed(3), amo: CWScore.amo,
                       acc: +CWScore.accuracy().toFixed(3), rank: CWScore.rank() },
              mech: CWMech.info(),                    /* P2：运行时机制快照（M1/M2/M5/M6，供门禁断言） */
+             lane3d: MelodyLane.info(),              /* P4：M5 航线带（挂载 / 点亮 / 段数）*/
              lens: Lens.info(),
              ant: CWAnt.info(),
              reso: CWReso.info(),
