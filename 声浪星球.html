@@ -3117,7 +3117,7 @@ var TRACKS = {
                 tags: ['5 段结构', '副歌开闸', 'Drop 俯冲'] },
   song2:      { id: 'song2', song: 'song2',
                 bgm: 'assets/song2.wav', chart: 'assets/song2-chart.json',
-                segs: 7, ready: false,
+                segs: 7, ready: true,
                 tags: ['7 段结构', '预副歌蓄能', '终章终结拍'] }
 };
 /* 当前曲目上下文（M1.enter 的 causeway 分支据此加载 BGM / 谱面 / 段落时钟）。
@@ -3610,13 +3610,13 @@ var ChartGen = {
       if (c.roll < 0.58) return { type: 'orb',   layer: c.pick() };
       return { type: 'gate', layer: c.pick() };
     },
-    preChorus: function(c){                                          /* 7 段结构专用（P3 起） */
-      if (c.roll < 0.40) return { type: 'pillar', layer: c.pick() };
-      return { type: 'gate', layer: c.pick() };
-    },
-    outro: function(c){                                              /* 7 段结构专用（P3 起） */
-      if (c.roll < 0.50) return { type: 'gate', layer: c.pick() };
+    preChorus: function(c){                                          /* 7 段结构专用（P3 起）· 与 gen_causeway.obstacleFor 逐字对齐 */
+      if (c.roll < 0.55) return { type: 'pillar', layer: c.pick() };
       return { type: 'orb', layer: c.pick() };
+    },
+    outro: function(c){                                              /* 7 段结构专用（P3 起）· 与 gen_causeway.obstacleFor 逐字对齐 */
+      if (c.roll < 0.50) return { type: 'gate', layer: c.pick() };
+      return { type: 'pillar', layer: c.pick() };
     }
   },
   /* 段落 kind 的机制标签（供 SongSelect / HUD 展示"这首歌会考什么"） */
@@ -3897,6 +3897,10 @@ var CWMech = {
   LANE_W: 3,           /* M5 局部斜率窗（八分音符数；≈0.57s @158BPM） */
   LANE_TH: 0.30,       /* M5 斜率阈值（生成器：2 半音/八分 ⇒ 满量程，±0.3 可辨） */
   PENTA: [0, 2, 3, 5, 7],   /* M6 五声音阶音级（半音）：永远协和，适合"弹琴" */
+  CHARGE_MAX: 0.30,    /* M3 蓄能：蓄满的乘区上浮（mCharge 1.0 → 1.3） */
+  CHARGE_T: 2.0,       /* M3 蓄能：蓄满所需的"同调长按"时长 (s) */
+  CADENCE: 1.5,        /* M4 终结拍：命中后的乘区封顶（象征性；终结拍命中本身另给高额 base） */
+  CADENCE_BONUS: 500,  /* M4 终结拍：命中一次性高额加分（只奖励、绝不倒扣，原则 P3） */
 
   over: false,         /* 是否处于副歌开闸（表现 / 断言用） */
   lane: null,          /* 生效中的旋律航线：'hi' | 'lo' | null */
@@ -3904,22 +3908,27 @@ var CWMech = {
   drop: false,         /* 本曲是否已触发 Drop */
   dropAt: -1,          /* Drop 触发时刻 (s) */
   dropTwinT: -1,       /* 被标记为 Drop 的双闸门时刻（Judge 据此给高额 base） */
-  charge: false,       /* M3 蓄能中（P3 接线） */
-  cadenceT: -1,        /* M4 终结拍时刻（P3 接线） */
+  charge: false,       /* M3：当前是否处于预副歌（蓄能窗口） */
+  chargeV: 0,          /* M3：蓄能进度 [0,1]（同调长按累积；进副歌兑现、其余段衰减） */
+  cadenceT: -1,        /* M4 终结拍时刻 (s)（outro 内最长的长音）；-1 = 该曲无终结拍 */
+  cadenceIdx: -1,      /* M4：终结拍在 chart.sustains 中的下标（CWReso.release 命中即点燃） */
+  cadenceHit: false,   /* M4：终结拍是否已命中（结算面板展示） */
   _pend: null, _bar: -1, _lastKind: null,
-  _ban: '', _banT: 0,
+  _ban: '', _banT: 0, _banCls: '',
   el: null, _q: null, _laneShown: '', _overShown: null,
 
   reset: function(){
     CWMech.over = false; CWMech.lane = null; CWMech.laneOn = false;
     CWMech.drop = false; CWMech.dropAt = -1; CWMech.dropTwinT = -1;
-    CWMech.charge = false; CWMech.cadenceT = -1;
+    CWMech.charge = false; CWMech.chargeV = 0;
+    CWMech.cadenceT = -1; CWMech.cadenceIdx = -1; CWMech.cadenceHit = false;
     CWMech._pend = null; CWMech._bar = -1; CWMech._lastKind = null;
-    CWMech._ban = ''; CWMech._banT = 0; CWMech._laneShown = ''; CWMech._overShown = null;
+    CWMech._ban = ''; CWMech._banT = 0; CWMech._banCls = ''; CWMech._laneShown = ''; CWMech._overShown = null;
     if (CWMech._q){
       CWMech._q.ban.className = 'ban'; CWMech._q.ban.textContent = '';
       CWMech._q.lane.className = 'lane'; CWMech._q.lane.textContent = '';
     }
+    CWMech._calibrate();                                   /* M4：换谱 / seek 后重定位"终结拍" */
   },
 
   /* ---- 段落切换：机制点火点（Track.update 在段落变化时调用一次）----------------
@@ -3965,15 +3974,51 @@ var CWMech = {
     return null;
   },
 
+  /* M4：定位"终结拍" = outro 段内**最长的那一个长音**（下标缓存，CWReso 命中它即点燃终结拍）。
+     只读谱面真值 ⇒ 无副作用、可重放；causeway 无 outro ⇒ cadenceIdx 恒 -1（不激活）。 */
+  _calibrate: function(){
+    CWMech.cadenceIdx = -1; CWMech.cadenceT = -1;
+    var d = Chart.data; if (!d || !d.sustains || !d.sections) return;
+    var out = null;
+    for (var i = 0; i < d.sections.length; i++) if (d.sections[i].kind === 'outro') out = d.sections[i];
+    if (!out) return;
+    var best = -1;
+    for (var j = 0; j < d.sustains.length; j++){
+      var s = d.sustains[j];
+      if (s.t0 < out.t0 - 0.001 || s.t0 >= out.t1 + 0.001) continue;   /* 只认 outro 段内的长音 */
+      if (s.t1 - s.t0 > best){ best = s.t1 - s.t0; CWMech.cadenceIdx = j; }
+    }
+    if (CWMech.cadenceIdx >= 0) CWMech.cadenceT = +d.sustains[CWMech.cadenceIdx].t1.toFixed(3);
+  },
+
+  /* M4：终结拍命中 ⇒ 高额加分 + 乘区封顶 + 大字横幅（由 CWReso.release 在判定该长音时调用）。
+     幂等：同一曲内只点燃一次。只奖励、绝不倒扣（原则 P3）。 */
+  cadence: function(){
+    if (CWMech.cadenceHit) return;
+    CWMech.cadenceHit = true;
+    CWScore.mCadence = CWMech.CADENCE;
+    CWScore.score += CWMech.CADENCE_BONUS;
+    CWMech.banner('终结拍 · FINAL ×' + CWMech.CADENCE.toFixed(1), 'over');
+    Bus.emit('cw:cadence', { t: Track.songT });
+    if (typeof m1Sfx === 'function') m1Sfx('cwCadence');
+    Feedback.pulse = 1;
+  },
+
   /* ---- M5 旋律航线：局部斜率定层；仅在**小节线**换航线（每小节至多一次 ⇒ 可读）---- */
-  updateLane: function(force){
+  /* 局部斜率均值（八分音符窗；M5 定航线层、M3 判"是否上行"共用同一读法） */
+  _slopeAt: function(){
     var m = Chart.data ? Chart.data.melody : null;
-    if (!m || !m.slope || !m.slope.length){ CWMech.lane = null; return; }
+    if (!m || !m.slope || !m.slope.length) return 0;
     var step = m.step || ((Chart.data.spb || 0.3797) / 2);
     var i = Math.floor(Track.songT / step);
     var s = 0, n = 0;
     for (var k = Math.max(0, i - (CWMech.LANE_W - 1)); k <= i && k < m.slope.length; k++){ s += m.slope[k]; n++; }
-    var avg = n ? s / n : 0;
+    return n ? s / n : 0;
+  },
+  updateLane: function(force){
+    var m = Chart.data ? Chart.data.melody : null;
+    if (!m || !m.slope || !m.slope.length){ CWMech.lane = null; return; }
+    var avg = CWMech._slopeAt();
     if (avg > CWMech.LANE_TH) CWMech._pend = 'hi';
     else if (avg < -CWMech.LANE_TH) CWMech._pend = 'lo';
     var bar = Math.floor(Track.songT / (Chart.data.bar || 1.52));
@@ -3991,13 +4036,25 @@ var CWMech = {
     return deg + ((sec.energy >= 0.85) ? 0 : -5);
   },
 
-  /* ---- 每帧：M5 乘区判定 + 表现层刷新（纯 DOM，只在变化时写）---- */
+  /* ---- 每帧：M5 乘区判定 + M3 蓄能累积 + 表现层刷新（纯 DOM，只在变化时写）---- */
   update: function(dt){
     if (!Track.isCw(cur)) return;
     CWMech.updateLane(false);
     /* M5：与航线同层 ⇒ 乘区生效。失手不计分 ⇒ 机制永不倒扣（原则 P3） */
     CWMech.laneOn = !!(CWMech.lane && Track.effLayer() === CWMech.lane);
     CWScore.mHarm = CWMech.laneOn ? CWMech.HARM : 1;
+    /* ---- M3 预副歌蓄能：预副歌里「同调长按」蓄力（旋律上行蓄得更快）；进副歌兑现为
+       乘区（整段副歌有效），其余段衰减回 1 ⇒ "预副歌蓄能、副歌爆发"。
+       只奖励（P3）：不按只是不涨，绝无倒扣；causeway 无 preChorus ⇒ 本支永不进入。 */
+    if (CWMech.charge){                              /* 在 preChorus 窗口内 */
+      if (CWInput.resonating){
+        var sl = CWMech._slopeAt();
+        CWMech.chargeV = Math.min(1, CWMech.chargeV + dt / CWMech.CHARGE_T * (sl >= 0 ? 1 : 0.25));
+      }
+    } else if (!CWMech.over){                        /* 副歌保留蓄能（带进爆发），其余段衰减 */
+      CWMech.chargeV = Math.max(0, CWMech.chargeV - dt / CWMech.CHARGE_T);
+    }
+    CWScore.mCharge = 1 + CWMech.CHARGE_MAX * CWMech.chargeV;
     if (CWMech._banT > 0) CWMech._banT = Math.max(0, CWMech._banT - dt);
     CWMech.paint();
   },
@@ -4042,7 +4099,9 @@ var CWMech = {
     return { over: CWMech.over, overMult: CWScore.mOver, lane: CWMech.lane, laneOn: CWMech.laneOn,
              harmMult: CWScore.mHarm, drop: CWMech.drop, dropAt: CWMech.dropAt === -1 ? null : +CWMech.dropAt.toFixed(3),
              dropTwinT: CWMech.dropTwinT === -1 ? null : +CWMech.dropTwinT.toFixed(3),
-             charge: CWMech.charge, cadenceT: CWMech.cadenceT,
+             charge: CWMech.charge, chargeV: +CWMech.chargeV.toFixed(3), chargeMult: +CWScore.mCharge.toFixed(3),
+             cadenceT: CWMech.cadenceT, cadenceIdx: CWMech.cadenceIdx, cadenceHit: CWMech.cadenceHit,
+             cadenceMult: +CWScore.mCadence.toFixed(3),
              step: CWMech.stepOf(), mechMult: +CWScore.mechMult().toFixed(3) };
   }
 };
@@ -4142,14 +4201,15 @@ var CWReso = {
     var L = CWReso._list(); if (!L.length) return false;
     if (!CWReso.done || CWReso.done.length !== L.length)
       CWReso.done = L.map(function(s){ return (s.t1 + Judge.G < Track.songT) ? 'skip' : null; });
-    var hit = false;
+    var hit = false, cad = false;
     for (var i = 0; i < L.length; i++){
       if (CWReso.done[i] !== null) continue;
       var d = tr - L[i].t1, a = Math.abs(d);
-      if (a <= Judge.P){ CWReso.done[i] = 'perfect'; hit = true; }
-      else if (a <= Judge.G){ CWReso.done[i] = 'good'; hit = true; }
+      if (a <= Judge.P){ CWReso.done[i] = 'perfect'; hit = true; if (i === CWMech.cadenceIdx) cad = true; }
+      else if (a <= Judge.G){ CWReso.done[i] = 'good'; hit = true; if (i === CWMech.cadenceIdx) cad = true; }
     }
     if (hit){ CWReso._recount(); m1Sfx('cwGood'); }
+    if (cad) CWMech.cadence();                       /* M4：命中终曲最长长音 ⇒ 点燃"终结拍"（只奖励） */
     return hit;
   },
   update: function(dt){
@@ -4238,7 +4298,8 @@ var CWResult = {
       maxCombo: CWScore.maxCombo, perfect: CWScore.perfect, good: CWScore.good, miss: CWScore.miss,
       orbs: CWScore.orbs, orbTotal: RhythmHUD._orbTotal || 0, decoy: CWScore.decoy,
       resoPerfect: CWReso.perfect, resoTotal: CWReso.total, mult: +CWScore.mult.toFixed(3),
-      antOk: CWAnt.okCount, antTotal: CWAnt.settled, onBeat: CWScore.onBeat };
+      antOk: CWAnt.okCount, antTotal: CWAnt.settled, onBeat: CWScore.onBeat,
+      cadence: CWMech.cadenceHit, cadenceMult: +CWScore.mCadence.toFixed(2) };   /* M4：终结拍是否命中 */
   },
   fill: function(r){
     var q = CWResult._q;
@@ -4252,7 +4313,8 @@ var CWResult = {
     q.judges.innerHTML = '<span class="p">PERFECT ' + r.perfect + '</span> · ' +
       '<span class="g">GOOD ' + r.good + '</span> · <span class="m">MISS ' + r.miss + '</span>';
     q.ant.textContent = '预判 ' + r.antOk + '/' + r.antTotal + ' · 同调 ' + r.resoPerfect + '/' + r.resoTotal +
-                        (r.onBeat ? ' · 踩拍 ' + r.onBeat : '');   /* P2：踩拍（压线切）计数可视化 */
+                        (r.onBeat ? ' · 踩拍 ' + r.onBeat : '') +                       /* P2：踩拍（压线切）计数可视化 */
+                        (r.cadence ? ' · 终结拍 ✓ ×' + r.cadenceMult.toFixed(1) : '');  /* M4：终结拍命中 */
   },
   tick: function(dt){
     if (CWResult.open) return;

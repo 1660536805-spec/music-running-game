@@ -9,7 +9,10 @@
      ② 曲库注册表：≥2 首、段落数不同 ⇒ "换歌即换关"有可选性。
      ③ 默认路径零漂移：不换歌时曲目上下文 / BGM / 谱面路径必须是金标路径。
      ④ 换歌链路：__cwSong 切到已就绪曲目后，场景仍在 causeway 且谱面重新就位。
-     ⑤ 未就绪守门：切到资产生成中的曲目必须被拒绝，且上下文不被污染。
+     ⑤ 未就绪守门：切到资产生成中的曲目必须被拒绝，且上下文不被污染（未知曲目同样被拒）。
+     ⑤a 第二首歌 song2（P3）：7 段结构就绪 + M7 自证（song2 障碍逐字段重建）+ M3 预副歌蓄能
+        （同调长按 ⇒ chargeV 上浮、mCharge > 1）+ M4 终曲终结拍（定位 outro 最长长音，
+        经 __cwAutoRelease 走真人松手通道命中 ⇒ cadenceHit）。
      ⑤b 运行时机制（P2）：M1 副歌开闸（进副歌 over=1.5 / 出副歌回落）／M2 Drop 俯冲（进 climax
         触发 + 标记段内首个双闸门）／M5 旋律航线（lane 非空 + 同航线 ×1.25）／M6 用跑道弹琴
         （各段音区不同且落在 [−5,7]）。
@@ -93,10 +96,10 @@ const GOLD = { track: 'superweave', chart: 'assets/causeway-chart.json', bgm: 'a
   ok(afterSw.cw.chart === true, '④ 换歌后谱面未重新就位');
 
   /* ---------------- ⑤ 未就绪守门 ---------------- */
-  console.log('=== ⑤ 未就绪曲目守门 ===');
+  console.log('=== ⑤ 未就绪曲目 / 未知曲目守门 ===');
   const notReady = (tracks || []).find(t => !t.ready);
   if (!notReady) {
-    console.log('   SKIP：当前所有曲目均已就绪（P3 起 song2 就绪后本项自动失效）');
+    console.log('   SKIP 未就绪分支：当前所有曲目均已就绪（P3 起 song2 就绪后本项自动失效）');
   } else {
     const r = await page.evaluate(id => window.__cwSong(id), notReady.id);
     const cwNow = await page.evaluate(() => window.__info().cw);
@@ -105,10 +108,75 @@ const GOLD = { track: 'superweave', chart: 'assets/causeway-chart.json', bgm: 'a
     ok(cwNow.track === GOLD.track, '⑤ 未就绪守门失败：上下文被污染为 ' + cwNow.track);
     ok(cwNow.chart === true, '⑤ 未就绪守门失败：谱面被清空');
   }
+  /* 未知曲目：任何情况下都必须被拒且不污染上下文 */
+  const unknown = await page.evaluate(() => window.__cwSong('__nope__'));
+  const cwU = await page.evaluate(() => window.__info().cw);
+  console.log('__cwSong(__nope__) = ' + JSON.stringify(unknown) + '  → track=' + cwU.track);
+  ok(unknown && unknown.error === 'unknown-track', '⑤ 未知曲目未被拒绝: ' + JSON.stringify(unknown));
+  ok(cwU.track === GOLD.track, '⑤ 未知曲目守门失败：上下文被污染为 ' + cwU.track);
+
+  /* ---------------- ⑤a 第二首歌 song2：M7 自证 + M3 蓄能 + M4 终结拍 ---------------- */
+  console.log('=== ⑤a song2（7 段）· M7 自证 + M3 预副歌蓄能 + M4 终曲终结拍 ===');
+  const seek2 = t => page.evaluate(tv => window.__cwSeek(tv), t);
+  const mech2 = () => page.evaluate(() => window.__info().cw.mech);
+  const sw2 = await page.evaluate(() => window.__cwSong('song2'));
+  await page.waitForTimeout(1400);
+  const cw2 = await page.evaluate(() => window.__info().cw);
+  console.log('__cwSong(song2) = ' + JSON.stringify(sw2) + '  → track=' + cw2.track + ' chart=' + cw2.chart);
+  ok(sw2 && !sw2.error, '⑤a 切到 song2 被拒: ' + JSON.stringify(sw2));
+  ok(cw2.track === 'song2', '⑤a song2 上下文未生效: ' + cw2.track);
+  ok(cw2.chart === true, '⑤a song2 谱面未加载');
+
+  /* M7 自证（song2）：运行时词汇表重建 song2 障碍必须与谱面内嵌 obstacles 逐字段一致 */
+  const gen2s = await page.evaluate(() => window.__cwGenCheck());
+  console.log('song2 genCheck = ' + JSON.stringify(gen2s));
+  ok(gen2s && gen2s.ok === true, '⑤a song2 ChartGen 自证失败: ' +
+    (gen2s ? ('got=' + gen2s.got + ' exp=' + gen2s.exp + ' bad=' + JSON.stringify(gen2s.bad)) : 'null'));
+
+  /* 7 段结构 + 「换歌即换关」：song2 的段落种类集合含 causeway 没有的 preChorus / outro */
+  const secs2 = await page.evaluate(() => (window.__cwChart() || {}).sections || []);
+  const kinds2 = secs2.map(s => s.kind);
+  console.log('song2 sections = ' + JSON.stringify(kinds2));
+  ok(kinds2.length === 7, '⑤a song2 段落数 ≠ 7: ' + kinds2.length);
+  ok(kinds2.includes('preChorus') && kinds2.includes('outro'),
+     '⑤a song2 缺 preChorus / outro（7 段结构未落地）: ' + JSON.stringify(kinds2));
+  const byKind2 = {}; secs2.forEach(s => { if (!byKind2[s.kind]) byKind2[s.kind] = s; });
+
+  /* M3 预副歌蓄能：进 preChorus + 同调长按 ⇒ chargeV 上浮、mCharge 离开 1（只奖励） */
+  const pre2 = byKind2.preChorus;
+  if (pre2) {
+    await seek2(pre2.t0 + 0.6); await page.waitForTimeout(340);
+    const c0 = await mech2();
+    console.log('M3 蓄能前 = ' + JSON.stringify({ charge: c0.charge, chargeV: c0.chargeV, chargeMult: c0.chargeMult }));
+    ok(c0.charge === true, '⑤a M3 未进入预副歌蓄能窗口: charge=' + c0.charge);
+    await page.keyboard.down('Space');
+    await page.waitForTimeout(1500);
+    const c1 = await mech2();
+    await page.keyboard.up('Space');
+    console.log('M3 蓄能后 = ' + JSON.stringify({ chargeV: c1.chargeV, chargeMult: c1.chargeMult }));
+    ok(c1.chargeV > 0, '⑤a M3 同调长按未蓄能: chargeV=' + c1.chargeV);
+    ok(c1.chargeMult > 1, '⑤a M3 蓄能未写入乘区: chargeMult=' + c1.chargeMult);
+  } else fails.push('⑤a song2 谱面无 preChorus 段');
+
+  /* M4 终曲终结拍：定位 outro 内最长长音（cadenceIdx ≥ 0）；同调长按至其结束松手 ⇒ 命中 */
+  const c0b = await mech2();
+  console.log('M4 终结拍定位 = ' + JSON.stringify({ idx: c0b.cadenceIdx, t: c0b.cadenceT }));
+  ok(c0b.cadenceIdx >= 0, '⑤a M4 未定位 song2 终结拍: idx=' + c0b.cadenceIdx);
+  if (c0b.cadenceIdx >= 0 && c0b.cadenceT != null) {
+    await seek2(Math.max(0, c0b.cadenceT - 1.2)); await page.waitForTimeout(320);
+    await page.keyboard.down('Space');
+    await page.evaluate(t => window.__cwAutoRelease(t), c0b.cadenceT);   /* 到点自动松手（走真人 CWInput.end 通道） */
+    await page.waitForTimeout(2400);
+    await page.keyboard.up('Space').catch(() => {});
+    const c2 = await mech2();
+    console.log('M4 终结拍命中 = ' + JSON.stringify({ hit: c2.cadenceHit, mult: c2.cadenceMult }));
+    ok(c2.cadenceHit === true, '⑤a M4 终结拍未命中: ' + JSON.stringify(c2));
+    ok(c2.cadenceMult > 1, '⑤a M4 终结拍未写入乘区: ' + c2.cadenceMult);
+  }
 
   /* ---------------- ⑤b 运行时机制 M1 / M2 / M5 / M6（P2） ---------------- */
   console.log('=== ⑤b 运行时机制（M1 副歌开闸 / M2 Drop / M5 航线 / M6 弹琴）===');
-  await page.evaluate(() => window.__cwSong('superweave'));   /* 确保 causeway 上下文（⑤ 可能切过歌） */
+  await page.evaluate(() => window.__cwSong('superweave'));   /* 确保 causeway 上下文（⑤ / ⑤a 可能切过歌） */
   await page.waitForTimeout(900);
   const seek = t => page.evaluate(tv => window.__cwSeek(tv), t);
   const mech = () => page.evaluate(() => window.__info().cw.mech);
