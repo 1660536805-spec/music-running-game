@@ -10,6 +10,9 @@
      ③ 默认路径零漂移：不换歌时曲目上下文 / BGM / 谱面路径必须是金标路径。
      ④ 换歌链路：__cwSong 切到已就绪曲目后，场景仍在 causeway 且谱面重新就位。
      ⑤ 未就绪守门：切到资产生成中的曲目必须被拒绝，且上下文不被污染。
+     ⑤b 运行时机制（P2）：M1 副歌开闸（进副歌 over=1.5 / 出副歌回落）／M2 Drop 俯冲（进 climax
+        触发 + 标记段内首个双闸门）／M5 旋律航线（lane 非空 + 同航线 ×1.25）／M6 用跑道弹琴
+        （各段音区不同且落在 [−5,7]）。
      ⑥ SongSelect 浮层：可由枢纽「选择歌曲」打开、Esc 收起，且不产生 three 对象。
      ⑦ 零 console / pageerror。
    任一不满足 → process.exit(1)。
@@ -102,6 +105,68 @@ const GOLD = { track: 'superweave', chart: 'assets/causeway-chart.json', bgm: 'a
     ok(cwNow.track === GOLD.track, '⑤ 未就绪守门失败：上下文被污染为 ' + cwNow.track);
     ok(cwNow.chart === true, '⑤ 未就绪守门失败：谱面被清空');
   }
+
+  /* ---------------- ⑤b 运行时机制 M1 / M2 / M5 / M6（P2） ---------------- */
+  console.log('=== ⑤b 运行时机制（M1 副歌开闸 / M2 Drop / M5 航线 / M6 弹琴）===');
+  await page.evaluate(() => window.__cwSong('superweave'));   /* 确保 causeway 上下文（⑤ 可能切过歌） */
+  await page.waitForTimeout(900);
+  const seek = t => page.evaluate(tv => window.__cwSeek(tv), t);
+  const mech = () => page.evaluate(() => window.__info().cw.mech);
+  const secs = await page.evaluate(() => (window.__cwChart() || {}).sections || []);
+  const byKind = {}; secs.forEach(s => { if (!byKind[s.kind]) byKind[s.kind] = s; });
+  const chorus = byKind.chorus, climax = byKind.climax, verse = byKind.verse;
+  console.log('sections = ' + JSON.stringify(secs.map(s => s.kind + '@' + s.t0)));
+
+  /* M1 副歌开闸：进副歌 → over=1.5；出副歌 → 回落 1.0（只认"段落变化"，天然幂等） */
+  if (chorus) {
+    await seek(chorus.t0 + 0.3); await page.waitForTimeout(650);
+    const a = await mech();
+    console.log('M1 进副歌 = ' + JSON.stringify(a));
+    ok(a.over === true, '⑤b M1 进副歌未开闸: over=' + a.over);
+    ok(a.overMult === 1.5, '⑤b M1 开闸倍率 ≠1.5: ' + a.overMult);
+    await seek(verse.t0 + 0.3); await page.waitForTimeout(650);
+    const b = await mech();
+    console.log('M1 出副歌 = ' + JSON.stringify(b));
+    ok(b.over === false, '⑤b M1 离副歌未回落: over=' + b.over);
+    ok(b.overMult === 1, '⑤b M1 离副歌倍率未复 1: ' + b.overMult);
+  } else fails.push('⑤b 谱面无 chorus 段');
+
+  /* M2 Drop 俯冲：首次进 climax → drop=true + 标记段内首个双闸门（本曲 t≈75.190） */
+  if (climax) {
+    await seek(climax.t0 + 0.3); await page.waitForTimeout(650);
+    const d = await mech();
+    console.log('M2 Drop = ' + JSON.stringify(d));
+    ok(d.drop === true, '⑤b M2 进 climax 未触发 Drop');
+    ok(d.dropTwinT != null && Math.abs(d.dropTwinT - 75.1899) < 0.01,
+      '⑤b M2 未标记段内首个双闸门: ' + d.dropTwinT);
+  } else fails.push('⑤b 谱面无 climax 段');
+
+  /* M6 用跑道弹琴：各段音区（步进半音）应随段落能量分层，且落在 [−5,7] */
+  const steps = [], sKinds = [];
+  for (const s of secs) {
+    await seek(s.t0 + 0.4); await page.waitForTimeout(220);
+    steps.push((await mech()).step); sKinds.push(s.kind);
+  }
+  console.log('M6 step = ' + JSON.stringify(sKinds.map((k, i) => k + ':' + steps[i])));
+  ok(steps.every(v => v >= -5 && v <= 7), '⑤b M6 step 越界: ' + JSON.stringify(steps));
+  ok(new Set(steps).size >= 2, '⑤b M6 各段音区相同（未随段落变化）: ' + JSON.stringify(steps));
+
+  /* M5 旋律航线：扫描若干时刻应有 lane；与航线同层 → harmMult=1.25（lo 段 seek 后即同层） */
+  let sawLane = null, laneHit = 0;
+  const dur = await page.evaluate(() => (window.__cwChart() || {}).duration || 0);
+  for (let i = 1; i <= 14 && !laneHit; i++) {
+    const t = 6 + (dur - 12) * (i / 15);
+    await seek(t); await page.waitForTimeout(130);
+    const m = await mech();
+    if (!m.lane) continue;
+    sawLane = m.lane;
+    if (m.lane === 'hi') { await page.keyboard.press('ArrowUp'); await page.waitForTimeout(130); }
+    const m2 = await mech();
+    if (m2.laneOn === true && m2.harmMult === 1.25) laneHit++;
+  }
+  console.log('M5 lane=' + JSON.stringify(sawLane) + '  同层 ×1.25 命中=' + laneHit);
+  ok(sawLane != null, '⑤b M5 旋律航线从未产生（lane 恒 null）');
+  ok(laneHit >= 1, '⑤b M5 与航线同层未给 ×1.25（laneOn / harmMult 未生效）');
 
   /* ---------------- ⑥ SongSelect 浮层 ---------------- */
   console.log('=== ⑥ SongSelect 浮层 ===');

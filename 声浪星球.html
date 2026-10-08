@@ -340,6 +340,22 @@
   #songsel .bts b:hover{background:rgba(255,255,255,.22)}
   #songsel .hint{margin-top:calc(16*var(--px));text-align:center;font-size:calc(18*var(--px));
     font-weight:600;letter-spacing:.04em;color:rgba(255,255,255,.44)}
+  /* ---- P2·CWMech：运行时机制表现层（纯 DOM / 零 draw call；M1 开闸 / M2 DROP 大字 / M5 航线 chip）---- */
+  #cwmech{--px:calc(100vh / 941);position:fixed;inset:0;pointer-events:none;z-index:15;
+    opacity:0;transition:opacity .2s;font-family:inherit}
+  #cwmech.on{opacity:1}
+  #cwmech .ban{position:absolute;left:50%;top:24%;transform:translate(-50%,0);opacity:0;
+    font-size:calc(78*var(--px));font-weight:800;letter-spacing:.16em;white-space:nowrap;color:#fff;
+    text-shadow:0 0 calc(24*var(--px)) rgba(125,232,255,.9),0 0 calc(60*var(--px)) rgba(125,232,255,.5)}
+  #cwmech .ban.over{color:#FFE9A8;text-shadow:0 0 calc(24*var(--px)) rgba(255,196,64,.9),0 0 calc(60*var(--px)) rgba(255,196,64,.5)}
+  #cwmech .ban.drop{color:#FFB3B3;text-shadow:0 0 calc(28*var(--px)) rgba(255,64,96,.95),0 0 calc(72*var(--px)) rgba(255,64,96,.55)}
+  #cwmech .lane{position:absolute;left:50%;bottom:12%;transform:translateX(-50%);opacity:0;
+    padding:calc(10*var(--px)) calc(28*var(--px));border-radius:calc(999*var(--px));
+    font-size:calc(22*var(--px));font-weight:700;letter-spacing:.08em;
+    border:calc(2*var(--px)) solid rgba(125,232,255,.5);background:rgba(20,40,60,.5);color:#BFEFFF;
+    transition:opacity .18s,background .12s,border-color .12s}
+  #cwmech .lane.on{opacity:1}
+  #cwmech .lane.hit{background:rgba(125,232,255,.28);border-color:rgba(125,232,255,.95);color:#fff}
 </style>
 </head>
 <body>
@@ -3011,6 +3027,7 @@ function loop(now){
         if (!CWResult.open){
           Lane.update(dt, cur);                      /* M3-OP：跑道换道插值（easeOutCubic） */
           Track.update(dt, cur);                     /* M3-CW：单赛道升降层插值（causeway 专用） */
+          if (Track.isCw(cur)) CWMech.update(dt);    /* P2：运行时机制（M5 航线乘区 + M1/M2 表现层刷新，置于判定前 ⇒ 同帧生效） */
           Obstacle.update(dt, cur, SCN[cur]);        /* M3-CW：谱面→障碍生成 / 掠过判定 / 回收 */
           PlayerController.update(dt, cur, SCN[cur]);
           Collectible.update(dt, cur, SCN[cur]);
@@ -3244,6 +3261,8 @@ var Track = {
     Track.layerY = 0; Track.fromY = 0; Track.toY = 0;
     Track.pitch = 0; Track.roll = 0; Track.buf = 0; Track.bufT = 0; Track.bump = 0;
     Track.songT = 0; Track.energy = 0; Track.lastSwitchT = -99;
+    Track.section = null;                                   /* P2：清段落游标 ⇒ 重启 / seek 后机制可重新点火 */
+    if (typeof CWMech !== 'undefined') CWMech.reset();      /* P2：机制状态随曲目复位（M1/M2/M5/M6） */
   },
   /* 判定用"有效层"：层间切换动画进行中时按**已提交的目标层**计（玩家已下决心，
      且 90 ms 切换 < 半拍 190 ms ⇒ 允许在闸门前压线切） */
@@ -3281,7 +3300,15 @@ var Track = {
       Track.songT = Chart.ready ? Track.tAtDist(d2) : 0;
     }
     var sec = Chart.ready ? Chart.sectionAt(Track.songT) : null;
-    if (sec){ Track.energy = sec.energy; Track.section = sec; }
+    if (sec){
+      Track.energy = sec.energy;
+      /* P2：只认"段落变化" ⇒ 这是机制的**唯一点火点**（M1 副歌/M2 Drop/M3 蓄能/M5 航线随段更新），
+         天然幂等；freeze 下 Track.update 不跑 ⇒ 定帧零漂移。 */
+      if (sec !== Track.section){
+        var from = Track.section; Track.section = sec;
+        if (typeof CWMech !== 'undefined') CWMech.onSection(sec, from);
+      }
+    }
     if (Track.bufT > 0){ Track.bufT = Math.max(0, Track.bufT - dt); if (Track.bufT === 0) Track.buf = 0; }
     if (Track.bump > 0) Track.bump = Math.max(0, Track.bump - dt);
     if (Track.t < 1){
@@ -3417,6 +3444,12 @@ function m1Sfx(kind, step){
     /* P1-模块E：音乐理解「听得见」—— 预判窗口开启 / 段落镜头切换 的听觉提示 */
     else if (kind === 'cwAntOpen')   tone('triangle',  988*mul, 1480*mul, 0.16, 0.14);
     else if (kind === 'cwLens')      tone('sine',     1318*mul, 1568*mul, 0.14, 0.11);
+    /* P2 · 运行时机制听觉签名（M1 副歌开闸 / M2 Drop 俯冲 / M3 蓄能 / M4 终结拍）
+       —— 每个机制的"点火瞬间"都要有独立音色，玩家才能不看 HUD 也听出"段落变了" */
+    else if (kind === 'cwOver')      tone('sawtooth',  440,  880, 0.30, 0.15);   /* 开闸：上扬 */
+    else if (kind === 'cwDrop')      tone('sawtooth',  150,   55, 0.50, 0.22);   /* 俯冲：下坠 */
+    else if (kind === 'cwCharge')    tone('triangle',  660, 1320, 0.34, 0.12);   /* 蓄能：爬升 */
+    else if (kind === 'cwCadence')   tone('sine',      523,  262, 0.70, 0.20);   /* 终结拍：收束 */
   } catch(e){}
 }
 
@@ -3523,7 +3556,7 @@ var Chart = {
     return true;
   },
   _resetConsumers: function(){
-    var mods = [CWScore, CWAnt, CWReso, Obstacle, CWResult];
+    var mods = [CWScore, CWAnt, CWReso, Obstacle, CWResult, CWMech];
     for (var i = 0; i < mods.length; i++)
       if (mods[i] && typeof mods[i].reset === 'function') mods[i].reset();
     RhythmHUD._orbTotal = 0;            /* 脉冲球总数按新谱重算（RhythmHUD.update 内惰性补算） */
@@ -3779,6 +3812,9 @@ var Judge = {
     if (grade === 'miss') m1Sfx('cwMiss');
     else if (o.type === 'orb') m1Sfx('cwOrb', Math.min(7, Math.floor(CWScore.combo / 8)));
     else Feedback.sfx(grade, CWScore.combo);        /* P2·D4：闸门命中音随连击升格（原音高恒定） */
+    /* P2·M2：Drop 俯冲 —— 本段「首个双闸门」命中给全曲最高单次 base（只加分，不改判定/计数） */
+    if (grade !== 'miss' && typeof CWMech !== 'undefined' && CWMech.dropTwinT >= 0
+        && Math.abs(o.t - CWMech.dropTwinT) < 1e-6) base = CWMech.DROP_BASE;
     CWScore.hit(grade, base);
   }
 };
@@ -3788,13 +3824,19 @@ var CWScore = {
   orbs: 0, orbMiss: 0, decoy: 0, onBeat: 0,
   mult: 1,        /* P4 同调倍率（1.0 + 0.5 × 同调达成率） */
   amo: 1,         /* P4 预判倍率（押对 ×1.5 / 其余 ×1.0） —— 本段内有效 */
+  /* P2/P3 运行时机制乘区（M1 副歌开闸 / M5 旋律航线 / M3 蓄能 / M4 终结拍）
+     —— 全部 **只乘在成功命中上**：失手时 hit('miss') 不加分，故机制永不倒扣（原则 P3）。*/
+  mOver: 1, mHarm: 1, mCharge: 1, mCadence: 1,
   reset: function(){
     CWScore.perfect = CWScore.good = CWScore.miss = 0;
     CWScore.combo = CWScore.maxCombo = CWScore.score = 0;
     CWScore.orbs = CWScore.orbMiss = CWScore.decoy = 0; CWScore.onBeat = 0;
     CWScore.mult = 1; CWScore.amo = 1;
+    CWScore.mOver = CWScore.mHarm = CWScore.mCharge = CWScore.mCadence = 1;
   },
   comboMult: function(){ return 1 + Math.min(CWScore.combo, 50) / 50 * 0.5; },
+  /* 机制乘区合并（M1 × M5 × M3 × M4）—— 与 comboMult / mult / amo 同处一个乘式 */
+  mechMult: function(){ return CWScore.mOver * CWScore.mHarm * CWScore.mCharge * CWScore.mCadence; },
   hit: function(grade, base){
     if (grade === 'miss'){ CWScore.miss++; CWScore.combo = 0; }
     else {
@@ -3802,7 +3844,7 @@ var CWScore = {
       CWScore.combo++;
       if (CWScore.combo > CWScore.maxCombo) CWScore.maxCombo = CWScore.combo;
       var b = (base == null) ? (grade === 'perfect' ? 100 : 60) : base;
-      CWScore.score += Math.round(b * CWScore.comboMult() * CWScore.mult * CWScore.amo);
+      CWScore.score += Math.round(b * CWScore.comboMult() * CWScore.mult * CWScore.amo * CWScore.mechMult());
     }
     RhythmHUD.flash(grade);
   },
@@ -3811,7 +3853,7 @@ var CWScore = {
     CWScore.onBeat++;
     CWScore.combo++;
     if (CWScore.combo > CWScore.maxCombo) CWScore.maxCombo = CWScore.combo;
-    CWScore.score += Math.round(10 * CWScore.comboMult() * CWScore.mult * CWScore.amo);
+    CWScore.score += Math.round(10 * CWScore.comboMult() * CWScore.mult * CWScore.amo * CWScore.mechMult());
   },
   accuracy: function(){
     var tot = CWScore.perfect + CWScore.good + CWScore.miss;
@@ -3827,7 +3869,186 @@ var CWScore = {
 };
 
 /* ==========================================================================
-   M3-CW · P4 音乐理解机制（CWAnt 预判窗口 + CWReso 同调长按）
+   P2 · CWMech —— 运行时专属机制（M1 副歌开闸 / M2 Drop 俯冲 / M5 旋律航线 / M6 用跑道弹琴）
+   --------------------------------------------------------------------------
+   为什么叫"运行时专属"：这四个机制的**触发条件都是音乐的段落语义**（副歌 / Drop /
+   旋律走向 / 段内音阶），而段落语义只存在于谱面里 ⇒ 它们天然是「换歌即换关」的载体：
+   换一首歌 ⇒ 段落序列不同 ⇒ 哪一段开闸、哪一拍俯冲、航线怎么走、音区落在哪，全都变了。
+
+   · M1 副歌开闸：进副歌（kind='chorus'）⇒ 乘区封顶 ×1.5 +「开闸」过载脉冲（点燃既有死事件
+     cw:layer）；离开副歌即回落。**只抬上限，不改判定**。
+   · M2 Drop 俯冲 ：首次进 climax ⇒ 镜头 FOV 尖峰 + 全屏 DROP 大字 + 段内**首个双闸门**
+     给全曲最高单次 base（220，常规 100）——"俯冲用一次爆发回答 Drop"。
+   · M5 旋律航线 ：读 chart.melody.slope（**八分音符级音高斜率**，生成器注释"±0.3 可辨"）。
+     取 3 步局部均值定"航线层"，并在**小节线处**才换航线 ⇒ 每小节至多一次、可读可跟。
+     与航线同层命中 ⇒ ×1.25。**注**：按段落取均值会因上下行抵消而恒 ≈0（已实测），
+     故必须取局部窗 —— 这也是 slope 作为"八分网格"数据的正确读法。
+   · M6 用跑道弹琴：命中音高来源从"随连击升格"改为**段内五声音阶步进**（低能段整体下沉
+     5 个半音，而非高能段上抬）⇒ 峰值不超既有封顶 7，且随段落换音区 ⇒ 连击听得出"成曲"。
+
+   设计纪律：全部只作用于**乘区 / 表现**，绝不倒扣分、绝不断连击、绝不改判定窗口（原则 P3）；
+   全部在 !FREEZE 分支 + 零 rnd() ⇒ 四场景定帧与随机流零漂移；表现层纯 DOM ⇒ 零 draw call。
+   ========================================================================== */
+var CWMech = {
+  OVER: 1.5,           /* M1 副歌开闸：副歌段乘区封顶 */
+  DROP_BASE: 220,      /* M2 Drop 俯冲：段内首个双闸门的高额单次 base（常规 100） */
+  HARM: 1.25,          /* M5 旋律航线：同航线层的乘区 */
+  DROP_FOV: 12,        /* M2 镜头 FOV 尖峰 (deg) */
+  LANE_W: 3,           /* M5 局部斜率窗（八分音符数；≈0.57s @158BPM） */
+  LANE_TH: 0.30,       /* M5 斜率阈值（生成器：2 半音/八分 ⇒ 满量程，±0.3 可辨） */
+  PENTA: [0, 2, 3, 5, 7],   /* M6 五声音阶音级（半音）：永远协和，适合"弹琴" */
+
+  over: false,         /* 是否处于副歌开闸（表现 / 断言用） */
+  lane: null,          /* 生效中的旋律航线：'hi' | 'lo' | null */
+  laneOn: false,       /* 当前是否"在航线上"（乘区已生效） */
+  drop: false,         /* 本曲是否已触发 Drop */
+  dropAt: -1,          /* Drop 触发时刻 (s) */
+  dropTwinT: -1,       /* 被标记为 Drop 的双闸门时刻（Judge 据此给高额 base） */
+  charge: false,       /* M3 蓄能中（P3 接线） */
+  cadenceT: -1,        /* M4 终结拍时刻（P3 接线） */
+  _pend: null, _bar: -1, _lastKind: null,
+  _ban: '', _banT: 0,
+  el: null, _q: null, _laneShown: '', _overShown: null,
+
+  reset: function(){
+    CWMech.over = false; CWMech.lane = null; CWMech.laneOn = false;
+    CWMech.drop = false; CWMech.dropAt = -1; CWMech.dropTwinT = -1;
+    CWMech.charge = false; CWMech.cadenceT = -1;
+    CWMech._pend = null; CWMech._bar = -1; CWMech._lastKind = null;
+    CWMech._ban = ''; CWMech._banT = 0; CWMech._laneShown = ''; CWMech._overShown = null;
+    if (CWMech._q){
+      CWMech._q.ban.className = 'ban'; CWMech._q.ban.textContent = '';
+      CWMech._q.lane.className = 'lane'; CWMech._q.lane.textContent = '';
+    }
+  },
+
+  /* ---- 段落切换：机制点火点（Track.update 在段落变化时调用一次）----------------
+     ▸ 只认"变化"，天然幂等；seek / 重玩经 Track.reset 清 section 后会重新点火。 */
+  onSection: function(sec, from){
+    if (!sec) return;
+    var kind = sec.kind;
+    /* ---- M1 副歌开闸 ---- */
+    var wasOver = CWMech.over;
+    CWMech.over = (kind === 'chorus');
+    CWScore.mOver = CWMech.over ? CWMech.OVER : 1;
+    if (CWMech.over && !wasOver){
+      Bus.emit('cw:layer', { to: 'overload', section: kind });   /* 点燃既有死事件 */
+      CWMech.banner('副歌开闸 ×' + CWMech.OVER.toFixed(1), 'over');
+      if (typeof m1Sfx === 'function') m1Sfx('cwOver');
+      Feedback.pulse = 1;
+    }
+    /* ---- M2 Drop 俯冲（本曲仅一次）---- */
+    if (kind === 'climax' && !CWMech.drop){
+      CWMech.drop = true; CWMech.dropAt = sec.t0;
+      var tw = CWMech.markDrop(sec);
+      CWMech.banner('DROP', 'drop');
+      Bus.emit('cw:drop', { t: sec.t0, twinT: CWMech.dropTwinT });
+      if (typeof Lens !== 'undefined' && Lens.kickTo) Lens.kickTo(CWMech.DROP_FOV, 0.55);
+      if (typeof m1Sfx === 'function') m1Sfx('cwDrop');
+      Feedback.pulse = 1;
+    }
+    /* ---- M3 蓄能（P3 接线：本函数先置位，谱面就绪即生效）---- */
+    CWMech.charge = (kind === 'preChorus');
+    CWMech._lastKind = kind;
+    CWMech.updateLane(true);
+  },
+
+  /* M2：定位"本段第一个双闸门"并记录其时刻（不改谱面数据 ⇒ 无副作用、可重放） */
+  markDrop: function(sec){
+    var os = Chart.data ? Chart.data.obstacles : null;
+    CWMech.dropTwinT = -1;
+    if (!os) return null;
+    for (var i = 0; i < os.length; i++){
+      var o = os[i];
+      if (o.t >= sec.t0 && o.t < sec.t1 && o.type === 'twin'){ CWMech.dropTwinT = o.t; return o; }
+    }
+    return null;
+  },
+
+  /* ---- M5 旋律航线：局部斜率定层；仅在**小节线**换航线（每小节至多一次 ⇒ 可读）---- */
+  updateLane: function(force){
+    var m = Chart.data ? Chart.data.melody : null;
+    if (!m || !m.slope || !m.slope.length){ CWMech.lane = null; return; }
+    var step = m.step || ((Chart.data.spb || 0.3797) / 2);
+    var i = Math.floor(Track.songT / step);
+    var s = 0, n = 0;
+    for (var k = Math.max(0, i - (CWMech.LANE_W - 1)); k <= i && k < m.slope.length; k++){ s += m.slope[k]; n++; }
+    var avg = n ? s / n : 0;
+    if (avg > CWMech.LANE_TH) CWMech._pend = 'hi';
+    else if (avg < -CWMech.LANE_TH) CWMech._pend = 'lo';
+    var bar = Math.floor(Track.songT / (Chart.data.bar || 1.52));
+    if (force || bar !== CWMech._bar){ CWMech._bar = bar; CWMech.lane = CWMech._pend; }
+  },
+
+  /* ---- M6 用跑道弹琴：段内五声音阶步进（半音）----
+     低能段整体下沉 5 个半音 ⇒ 峰值不超过既有封顶 7（不刺耳）；段内逐拍走音阶 ⇒ "连击成曲"。 */
+  stepOf: function(){
+    var sec = Track.section;
+    var spb = (Chart.data && Chart.data.spb) || 0.3797;
+    if (!sec) return 0;
+    var beat = Math.max(0, Math.floor((Track.songT - sec.t0) / spb));
+    var deg = CWMech.PENTA[beat % CWMech.PENTA.length];
+    return deg + ((sec.energy >= 0.85) ? 0 : -5);
+  },
+
+  /* ---- 每帧：M5 乘区判定 + 表现层刷新（纯 DOM，只在变化时写）---- */
+  update: function(dt){
+    if (!Track.isCw(cur)) return;
+    CWMech.updateLane(false);
+    /* M5：与航线同层 ⇒ 乘区生效。失手不计分 ⇒ 机制永不倒扣（原则 P3） */
+    CWMech.laneOn = !!(CWMech.lane && Track.effLayer() === CWMech.lane);
+    CWScore.mHarm = CWMech.laneOn ? CWMech.HARM : 1;
+    if (CWMech._banT > 0) CWMech._banT = Math.max(0, CWMech._banT - dt);
+    CWMech.paint();
+  },
+
+  banner: function(text, cls){ CWMech._ban = text; CWMech._banCls = cls || ''; CWMech._banT = 1.1; },
+
+  _ensure: function(){
+    if (CWMech.el) return CWMech.el;
+    var d = document.createElement('div'); d.id = 'cwmech';
+    d.innerHTML = '<b class="ban"></b><i class="lane"></i>';
+    document.body.appendChild(d);
+    CWMech.el = d;
+    CWMech._q = { ban: d.querySelector('.ban'), lane: d.querySelector('.lane') };
+    return d;
+  },
+  /* 表现层：仅在文本 / class 变化时写 DOM（零重排；FREEZE / SHOWCASE 下完全不建节点） */
+  paint: function(){
+    if (FREEZE || SHOWCASE) return;
+    /* 已有内容或需要展示时才建节点 ⇒ 非 causeway 场景零 DOM */
+    if (!CWMech._banT && !CWMech.lane && !CWMech._q) return;
+    CWMech._ensure();
+    var q = CWMech._q, on = (CWMech.el.className !== 'on');
+    if (on) CWMech.el.className = 'on';
+    var cls = CWMech._banT > 0 ? ('ban on ' + (CWMech._banCls || '')) : 'ban';
+    if (q.ban.className !== cls){ q.ban.className = cls; }
+    if (CWMech._banT > 0 && q.ban.textContent !== CWMech._ban) q.ban.textContent = CWMech._ban;
+    if (CWMech._banT > 0){
+      var k = Math.min(1, CWMech._banT / 0.28).toFixed(2);
+      q.ban.style.opacity = k;
+    } else if (q.ban.style.opacity !== '0') q.ban.style.opacity = '0';
+    /* 航线 chip：文本含方向箭头；在航线上时点亮（乘区已生效的可见证据） */
+    var txt = CWMech.lane ? (CWMech.lane === 'hi' ? '▲ 航线 HI' : '▼ 航线 LO') : '';
+    if (txt !== CWMech._laneShown){
+      CWMech._laneShown = txt;
+      if (q.lane.textContent !== txt) q.lane.textContent = txt;
+    }
+    var lcls = 'lane' + (txt ? ' on' : '') + (CWMech.laneOn ? ' hit' : '');
+    if (q.lane.className !== lcls) q.lane.className = lcls;
+  },
+
+  info: function(){
+    return { over: CWMech.over, overMult: CWScore.mOver, lane: CWMech.lane, laneOn: CWMech.laneOn,
+             harmMult: CWScore.mHarm, drop: CWMech.drop, dropAt: CWMech.dropAt === -1 ? null : +CWMech.dropAt.toFixed(3),
+             dropTwinT: CWMech.dropTwinT === -1 ? null : +CWMech.dropTwinT.toFixed(3),
+             charge: CWMech.charge, cadenceT: CWMech.cadenceT,
+             step: CWMech.stepOf(), mechMult: +CWScore.mechMult().toFixed(3) };
+  }
+};
+
+/* ==========================================================================
+   M3-CW · P4 音乐理解机制（CWAnt 预判窗口 + CWReso 同调长按)
    --------------------------------------------------------------------------
    对齐 docs/声浪星球-关卡设计-超频长阶.md §6 / §7.4：
      · CWAnt  §6.1：段落交界**前 2 拍**开窗，HUD 出走向符号（谱面 melody.slope 预判的 ↑/↓/~）；
@@ -4460,9 +4681,11 @@ var Feedback = {
     Feedback.sfx(kind, combo);
     Feedback.pop(kind, text);
   },
-  /* 连击升格：每 8 连升 1 个半音，封顶 7（避免尖锐） */
+  /* 命中音高：causeway 走「用跑道弹琴」M6 —— 段内五声音阶步进（换歌即换音区）；
+     其余场景保留原「每 8 连升 1 个半音，封顶 7」。只改音高，判定 / 计分零改。 */
   sfx: function(kind, combo){
-    var step = Math.min(7, Math.floor((combo || 0) / 8));
+    var step = (typeof CWMech !== 'undefined' && Track.isCw(cur))
+      ? CWMech.stepOf() : Math.min(7, Math.floor((combo || 0) / 8));
     if (kind === 'perfect') m1Sfx('cwHit', step);
     else if (kind === 'good') m1Sfx('cwGood', step);
     else m1Sfx('cwMiss');
@@ -4753,10 +4976,14 @@ var LENSG = {
 var Lens = {
   cur: 'chase', t: 1, DUR: 0.180, fromGeo: null, fromFov: 70, fov: 70,
   ay: null, driftPh: 0, cueIdx: 0, lastBar: -99, lastPhrase: -1, _lensOn: false,
+  kick: 0, kickT: 999, kickDur: 0,                        /* P2·M2：Drop 全景 FOV 冲击（一次性、随时间衰减） */
   fixed: (Q.get('fixchase') === '1'),
+  /* P2·M2：请求一次 FOV 冲击（deg 度数 / dur 秒）—— 叠加在常态 FOV 曲线上，衰减后归零 ⇒ 不改常态 */
+  kickTo: function(deg, dur){ Lens.kick = deg; Lens.kickDur = dur || 0.5; Lens.kickT = 0; },
   reset: function(){
     Lens.cur = 'chase'; Lens.t = 1; Lens.cueIdx = 0; Lens.lastBar = -99; Lens.lastPhrase = -1;
     Lens.fromGeo = null; Lens.fov = LENSG.chase.fov; Lens.ay = null; Lens.driftPh = 0;
+    Lens.kick = 0; Lens.kickT = 999; Lens.kickDur = 0;
     if (FREEZE) return;                                   /* 定帧绝不写相机 */
     var S = SCN.causeway; if (!S || !S.camera || !S.hero) return;
     S.camera.fov = CAM.causeway.fov; S.camera.updateProjectionMatrix();
@@ -4795,6 +5022,11 @@ var Lens = {
     var en = clamp(Track.energy, 0, 1);
     var drive = clamp(0.7 * spr + 0.3 * Math.max(0, en - CW.SPRINT_AT) / (1 - CW.SPRINT_AT), 0, 1);
     var fovT = G.fov + (92 - G.fov) * drive;
+    /* P2·M2：Drop 冲击叠加（限时衰减，归零后常态曲线不变 ⇒ 定帧 / 门禁不受影响） */
+    if (Lens.kickT < Lens.kickDur){
+      Lens.kickT += dt;
+      fovT += Lens.kick * (1 - Lens.kickT / Lens.kickDur);
+    }
     Lens.fov = FF + (fovT - FF) * e;
     /* 相机 y 走短时常数阻尼（吃掉 0.9m 层切换的顿挫）；x/z 刚性跟随 ⇒ "世界向后流过" */
     if (Lens.ay == null) Lens.ay = h.position.y;
@@ -4885,6 +5117,7 @@ var M1 = {
       var tk = CW.track || TRACKS.superweave;
       Chart.load(tk.chart); BGM.use(tk.bgm);
       CWScore.reset();
+      if (typeof CWMech !== 'undefined') CWMech.reset();   /* P2：清机制状态（副歌开闸 / Drop / 航线 / 音区）*/
       Lens.reset();                  /* M3-CW·P4：相机复位（fov 归 70 + 贴回 chase ⇒ 修往返后 fov 残留） */
       CWAnt.reset();                 /* M3-CW·P4：清预判窗口 / 押注 / amo */
       CWReso.reset();                /* M3-CW·P4：清同调长音判定 / mult */
@@ -5014,6 +5247,7 @@ window.__cwTracks = function(){
   });
 };
 window.__SongSelect = SongSelect;
+window.__cwMech = CWMech;   /* P2：运行时机制调试钩子（供 mech.js 断言 M1/M2/M5/M6） */
 window.__cwLensInfo = function(){ return Lens.info(); };
 window.__cwLens = function(name){ return Lens.toLens(name, null); };
 window.__cwLensFixed = function(on){ Lens.fixed = !!on; if (on) Lens.cur = Lens.cur || 'chase'; return Lens.fixed; };
@@ -5062,6 +5296,7 @@ window.__info = function(){
                       orbs: CWScore.orbs, orbMiss: CWScore.orbMiss, decoy: CWScore.decoy,
                       mult: +CWScore.mult.toFixed(3), amo: CWScore.amo,
                       acc: +CWScore.accuracy().toFixed(3), rank: CWScore.rank() },
+             mech: CWMech.info(),                    /* P2：运行时机制快照（M1/M2/M5/M6，供门禁断言） */
              lens: Lens.info(),
              ant: CWAnt.info(),
              reso: CWReso.info(),
