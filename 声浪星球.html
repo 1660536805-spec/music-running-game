@@ -294,6 +294,52 @@
     padding:8px 10px;border-radius:8px;max-width:44vw;white-space:pre-wrap}
   #dbg.on{display:block}
   .flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:11;transition:opacity .1s}
+
+  /* ---------------- P1 · 曲目选择浮层（「换歌即换关」的入口，纯 DOM / 零 draw call） ------------- */
+  #songsel{--px:calc(100vh / 941);position:fixed;inset:0;z-index:22;display:none;
+    align-items:center;justify-content:center;pointer-events:none;
+    background:radial-gradient(circle at 50% 40%,rgba(8,4,22,.74),rgba(3,2,10,.92))}
+  #songsel.on{display:flex;pointer-events:auto}
+  #songsel .card{width:calc(880*var(--px));max-height:calc(772*var(--px));overflow:auto;
+    padding:calc(38*var(--px)) calc(46*var(--px)) calc(34*var(--px));
+    border-radius:calc(34*var(--px));background:rgba(14,8,34,.88);
+    border:calc(2*var(--px)) solid rgba(140,255,200,.24);color:#fff;
+    box-shadow:0 calc(32*var(--px)) calc(96*var(--px)) rgba(0,0,0,.58);backdrop-filter:blur(10px)}
+  #songsel .hd{font-size:calc(30*var(--px));font-weight:800;letter-spacing:.10em}
+  #songsel .sub{margin-top:calc(8*var(--px));font-size:calc(20*var(--px));font-weight:600;
+    letter-spacing:.04em;color:rgba(255,255,255,.56)}
+  #songsel .list{margin-top:calc(24*var(--px));display:flex;flex-direction:column;gap:calc(14*var(--px))}
+  #songsel .tk{display:flex;align-items:center;gap:calc(22*var(--px));
+    padding:calc(18*var(--px)) calc(26*var(--px));border-radius:calc(22*var(--px));
+    border:calc(2*var(--px)) solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);
+    cursor:pointer;transition:background .12s,border-color .12s,transform .12s}
+  #songsel .tk:hover{background:rgba(140,255,200,.12);border-color:rgba(140,255,200,.52);
+    transform:translateX(calc(6*var(--px)))}
+  #songsel .tk.cur{border-color:rgba(140,255,200,.80);background:rgba(140,255,200,.16)}
+  #songsel .tk.off{opacity:.44;cursor:not-allowed}
+  #songsel .tk.off:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.16);transform:none}
+  #songsel .tk .nm{flex:1;min-width:0}
+  #songsel .tk .nm b{display:block;font-size:calc(30*var(--px));font-weight:800;letter-spacing:.02em}
+  #songsel .tk .nm s{display:block;text-decoration:none;margin-top:calc(6*var(--px));
+    font-size:calc(19*var(--px));font-weight:600;color:rgba(255,255,255,.52)}
+  #songsel .tk .mt{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  #songsel .tk .mt b{display:block;font-size:calc(24*var(--px));font-weight:800}
+  #songsel .tk .mt s{display:block;text-decoration:none;font-size:calc(18*var(--px));
+    font-weight:700;letter-spacing:.12em;color:rgba(255,255,255,.44);margin-top:calc(4*var(--px))}
+  #songsel .tags{margin-top:calc(10*var(--px));display:flex;flex-wrap:wrap;gap:calc(8*var(--px))}
+  #songsel .tags i{font-style:normal;font-size:calc(17*var(--px));font-weight:700;
+    letter-spacing:.06em;padding:calc(5*var(--px)) calc(14*var(--px));border-radius:calc(999*var(--px));
+    border:calc(2*var(--px)) solid rgba(125,232,255,.42);background:rgba(125,232,255,.14);color:#BFEFFF}
+  #songsel .tk.off .tags i{border-color:rgba(255,255,255,.24);background:rgba(255,255,255,.08);
+    color:rgba(255,255,255,.60)}
+  #songsel .bts{display:flex;justify-content:center;margin-top:calc(26*var(--px))}
+  #songsel .bts b{padding:calc(14*var(--px)) calc(42*var(--px));border-radius:calc(999*var(--px));
+    font-size:calc(24*var(--px));font-weight:700;letter-spacing:.10em;cursor:pointer;
+    border:calc(2*var(--px)) solid rgba(255,255,255,.32);background:rgba(255,255,255,.12);color:#fff;
+    transition:background .12s}
+  #songsel .bts b:hover{background:rgba(255,255,255,.22)}
+  #songsel .hint{margin-top:calc(16*var(--px));text-align:center;font-size:calc(18*var(--px));
+    font-weight:600;letter-spacing:.04em;color:rgba(255,255,255,.44)}
 </style>
 </head>
 <body>
@@ -2579,7 +2625,7 @@ var HUD_DEF = {
     return '<div class="hud title"><h1>声浪星球</h1><p>用音乐，探索更远的世界</p><div class="menu">' +
       '<button class="primary" data-go="desert"><span class="ic">▶</span>开始旅程</button>' +
       '<button data-go="causeway"><span class="ic">⚡</span>超频长阶</button>' +
-      '<button data-go="home"><span class="ic">♫</span>选择歌曲</button>' +
+      '<button data-songsel="1"><span class="ic">♫</span>选择歌曲</button>' +
       '<button data-go="home"><span class="ic">▣</span>星球图鉴</button>' +
       '<button data-go="home"><span class="ic">⚙</span>设置</button></div></div>';
   },
@@ -2592,7 +2638,7 @@ var HUD_DEF = {
   /* M3-CW ·《超频长阶》：单赛道操作提示（↑/W 升 · ↓/S 降 · 长按空格 同调）+
      常驻「同调」圆钮作触摸兜底（触摸主通道 = 上半屏轻点升 / 下半屏轻点降 / 长按任意处同调） */
   causeway: function(){
-    return musicCard(SONGS.superweave, '00:00', '01:37') +
+    return musicCard(trackSong(), '00:00', trackTotal()) +
       '<div class="hud glass prompt cwhint"><kbd>↑</kbd><kbd>W</kbd>升 · <kbd>↓</kbd><kbd>S</kbd>降 · 长按<kbd>空格</kbd>同调 <em>⚡</em></div>' +
       '<div class="hud rbtns cwres"><b data-act="resonate">同调</b></div>';
   }
@@ -2616,7 +2662,12 @@ function buildHUD(){
   document.getElementById('divider').classList.toggle('on', SHOWCASE);
   Array.prototype.forEach.call(host.querySelectorAll('.menu button'), function(b){
     /* 点击即用户手势 → 顺带初始化音频，使进入 causeway 时 BGM 立刻可起播（否则要等下一次按键） */
-    b.addEventListener('click', function(){ if (!SHOWCASE){ initAudio(); setScene(b.getAttribute('data-go')); } });
+    b.addEventListener('click', function(){
+      if (SHOWCASE) return;
+      initAudio();
+      if (b.getAttribute('data-songsel')){ SongSelect.open(); return; }   /* P1：曲目选择浮层 */
+      setScene(b.getAttribute('data-go'));
+    });
   });
   /* §0.4-2/-3：HUD 动作分流——跑=冲刺(按住) / 跳=跳跃 / ♪=踩拍 / 同调=长按(M3-CW) */
   Array.prototype.forEach.call(host.querySelectorAll('[data-act]'), function(el){
@@ -2648,6 +2699,7 @@ var cur = (STARTKEY === 'showcase') ? 'home' : STARTKEY;
 var jump = { y: 0, v: 0, on: false, perfect: false };
 function setScene(k){
   if (!SCN[k]) return;
+  SongSelect.close();            /* P1：任何场景切换都收起曲目浮层（浮层未创建时零操作） */
   cur = k;
   M1.enter(k);
   buildHUD();
@@ -2759,6 +2811,11 @@ addEventListener('pointerup', function(e){ if (isCw()) CWInput.release(e.clientY
 addEventListener('pointercancel', function(){ if (isCw()) CWInput.cancel(); });
 addEventListener('keydown', function(e){
   Input.keys[e.code] = true;
+  /* P1：曲目浮层打开时独占键盘（Esc / 回车关闭），避免误触玩法输入 */
+  if (SongSelect.isOpen()){
+    if (e.key === 'Escape' || e.key === 'Enter'){ e.preventDefault(); SongSelect.close(); }
+    return;
+  }
   if (isCw()){
     /* M3-CW：单赛道关——↑/W 升、↓/S 降、长按 空格 同调；不触发跳跃 / 换道 */
     if (e.code === 'ArrowUp'   || e.code === 'KeyW'){ e.preventDefault(); if (!e.repeat) CWInput.lift(); }
@@ -3025,8 +3082,33 @@ var SONGS = {
   nocturne: { name: '夜曲', artist: '周杰伦', bpm: 126, total: '03:46', wave: 2.1 },
   rice:     { name: '稻香', artist: '周杰伦', bpm: 110, total: '03:43', wave: 4.7 },
   /* M3-CW ·《超频长阶》内置合成曲（由 tools/gen_causeway.js 生成，真值谱面同源） */
-  superweave: { name: '超频长阶', artist: 'Soundwave Planet', bpm: 158, total: '01:37', wave: 7.3 }
+  superweave: { name: '超频长阶', artist: 'Soundwave Planet', bpm: 158, total: '01:37', wave: 7.3 },
+  /* P1 · 第二首预烘焙曲（换歌即换关的正面证据）：7 段结构、不同 BPM / 和弦 / 机制分派。
+     assets 由 tools/gen_causeway.js 生成；ready:false 期间 SongSelect 置灰，生成后翻 true。 */
+  song2: { name: '银翼回响', artist: 'Soundwave Planet', bpm: 112, total: '01:48', wave: 3.4 }
 };
+
+/* ---- 单赛道引擎曲库（CW.track 的注册表）------------------------------------
+   与 SONGS 分工：SONGS 是"显示用元数据"（名/艺人/BPM/时长/波形），TRACKS 是
+   "单赛道引擎可加载的曲目"（BGM 路径 + 真值谱面路径 + 指向 SONGS 的 song 键）。
+   默认曲 = superweave ⇒ 路径与现状逐位一致（门禁零漂移）。
+   ready 标志：资产未就绪时 SongSelect 不允许切换，避免 fetch 失败导致空谱面。 */
+var TRACKS = {
+  superweave: { id: 'superweave', song: 'superweave',
+                bgm: 'assets/causeway.wav', chart: 'assets/causeway-chart.json',
+                segs: 5, ready: true,
+                tags: ['5 段结构', '副歌开闸', 'Drop 俯冲'] },
+  song2:      { id: 'song2', song: 'song2',
+                bgm: 'assets/song2.wav', chart: 'assets/song2-chart.json',
+                segs: 7, ready: false,
+                tags: ['7 段结构', '预副歌蓄能', '终章终结拍'] }
+};
+/* 当前曲目上下文（M1.enter 的 causeway 分支据此加载 BGM / 谱面 / 段落时钟）。
+   默认 = superweave ⇒ 与既有写死路径行为完全一致。 */
+CW.track = TRACKS.superweave;
+/* 便捷取用：曲目显示元数据（名/艺人/BPM/时长/wave），供 musicCard / BeatClock 使用 */
+function trackSong(tk){ tk = tk || CW.track; return SONGS[(tk && tk.song) || 'superweave'] || SONGS.superweave; }
+function trackTotal(tk){ var s = trackSong(tk); return s.total || '--:--'; }
 
 /* ---- 关卡定义（GDD §4.2 / §4.6 / §4.7）----
    M1：desert 浅纵深轻量关（晶体 z 压缩进可玩带，x 布局签名沿用 §4.6）。
@@ -3359,7 +3441,7 @@ function loadBGM(){
   if (bgmBuf || bgmAB || loadBGM._l) return;
   loadBGM._l = true;
   try {
-    fetch('assets/causeway.wav')
+    fetch(BGM.path)
       .then(function(r){ return r.arrayBuffer(); })
       .then(function(ab){ bgmAB = ab; bgmDecode(); })
       .catch(function(){ loadBGM._l = false; });
@@ -3377,7 +3459,17 @@ function bgmDecode(){
   } catch(e){ bgmAB = null; loadBGM._l = false; }
 }
 var BGM = {
-  want: false, playing: false,
+  want: false, playing: false, path: 'assets/causeway.wav',
+  /* 换曲入口：路径未变 ⇒ 直接起播（默认曲零开销、行为不变）；
+     路径变了才丢弃已解码缓冲并重取（RK5：避免串曲）。 */
+  use: function(path){
+    if (path && path !== BGM.path){
+      BGM.stop();
+      BGM.path = path;
+      bgmBuf = null; bgmAB = null; loadBGM._l = false;
+    }
+    BGM.start();
+  },
   start: function(){
     BGM.want = true;
     if (!actx){ loadBGM(); return; }             /* 尚无声手势 → 仅预取，待 initAudio 续播 */
@@ -3407,21 +3499,196 @@ var BGM = {
 
 /* ---- M3-CW · 真值谱面（与 WAV 同源；P3 起驱动障碍/判定，P2 仅取段落能量驱动冲刺）---- */
 var Chart = {
-  data: null, ready: false, _l: false,
-  load: function(){
+  data: null, ready: false, _l: false, path: 'assets/causeway-chart.json',
+  /* 加载真值谱面：path 变化 ⇒ 作废旧谱（数据 + 全部游标）；默认路径零开销（行为不变）。 */
+  load: function(path){
+    if (path && path !== Chart.path){
+      Chart.path = path; Chart.data = null; Chart.ready = false; Chart._l = false;
+    }
     if (Chart.ready || Chart._l) return;
     Chart._l = true;
     try {
-      fetch('assets/causeway-chart.json')
+      fetch(Chart.path)
         .then(function(r){ return r.json(); })
-        .then(function(j){ Chart.data = j; Chart.ready = true; Bus.emit('chart:ready', {}); })
+        .then(function(j){ if (Chart.set(j)) Bus.emit('chart:ready', {}); })
         .catch(function(){ Chart._l = false; });
     } catch(e){ Chart._l = false; }
+  },
+  /* 直接注入谱面 —— 预烘焙（fetch）与运行时分析器（ChartGen）共用同一入口（P5 原则）。
+     必须重置所有"按谱面缓存游标"的消费者，否则换歌串谱（RK5）。 */
+  set: function(j){
+    if (!j || !j.sections) return false;
+    Chart.data = j; Chart.ready = true; Chart._l = true;
+    Chart._resetConsumers();
+    return true;
+  },
+  _resetConsumers: function(){
+    var mods = [CWScore, CWAnt, CWReso, Obstacle, CWResult];
+    for (var i = 0; i < mods.length; i++)
+      if (mods[i] && typeof mods[i].reset === 'function') mods[i].reset();
+    RhythmHUD._orbTotal = 0;            /* 脉冲球总数按新谱重算（RhythmHUD.update 内惰性补算） */
   },
   sectionAt: function(t){
     var ss = Chart.data ? Chart.data.sections : null; if (!ss) return null;
     for (var i = 0; i < ss.length; i++) if (t >= ss[i].t0 && t < ss[i].t1) return ss[i];
     return ss.length ? ss[ss.length - 1] : null;
+  }
+};
+
+/* ==========================================================================
+   P1 · ChartGen —— 运行时「音乐结构 → 机制」翻译器（= M7 结构轮转表的落地形态）
+   --------------------------------------------------------------------------
+   主张：**同一套机制词汇表**驱动两种谱面来源：
+     · 预烘焙路径：tools/gen_causeway.js 离线产出真值谱面（golden path）；
+     · 运行时路径：P5 分析器把任意歌 → Analysis → 本模块 → 谱面（消费端零改动）。
+   RULES 是词汇表本体 —— 「段落类型 → 这一段每拍该放什么」。它把音乐的时间结构
+   （副歌 / Drop / 桥段 …）映射成操作要求（切层 / 不操作 / 同调 / 无视），
+   这正是"换一首歌，玩法会不会变"的**实现层答案**：换歌 ⇒ 段落序列变 ⇒ 机制组合变。
+
+   正确性自证：build() 是对 gen_causeway.js 第 302–362 行分派逻辑的逐行移植
+   （含 rng 消费顺序与 id 分配顺序），故 build(causewayChart) 必须与谱面内既有
+   obstacles 完全一致 —— 见调试钩子 __cwGenCheck()。
+   ⚠ 与 tools/gen_causeway.js 的分派表为**镜像关系**，两处改动必须同步。
+   ========================================================================== */
+var ChartGen = {
+  /* ---- 机制词汇表（M7）：段落类型 → 每拍决策 ----
+     规则签名 (c) => ({type, layer}) | null
+       c = { roll, pick(), b, b1, t, kind, sec }
+     ⚠ rng 消费顺序是契约的一部分（intro 与 twin 分支**不消费** pick），
+       否则整条随机流错位、谱面不能再现。preChorus / outro 供 7 段结构使用。 */
+  RULES: {
+    intro: function(c){ return { type: 'gate', layer: (c.b % 2 === 0) ? 'lo' : 'hi' }; },
+    verse: function(c){
+      if (c.roll < 0.28) return { type: 'orb', layer: c.pick() };
+      return { type: (c.b >= c.b1 - 4 && c.roll < 0.70) ? 'pillar' : 'gate', layer: c.pick() };
+    },
+    chorus: function(c){
+      if (c.roll < 0.30) return { type: 'decoy', layer: c.pick() };
+      if (c.roll < 0.45) return { type: 'orb',   layer: c.pick() };
+      return { type: 'gate', layer: c.pick() };
+    },
+    bridge: function(c){
+      if (c.roll < 0.62) return { type: 'orb', layer: c.pick() };
+      return { type: 'gate', layer: c.pick() };
+    },
+    climax: function(c){
+      if (c.roll < 0.30) return { type: 'twin',  layer: 'both' };   /* 不消费 pick（同生成器） */
+      if (c.roll < 0.45) return { type: 'decoy', layer: c.pick() };
+      if (c.roll < 0.58) return { type: 'orb',   layer: c.pick() };
+      return { type: 'gate', layer: c.pick() };
+    },
+    preChorus: function(c){                                          /* 7 段结构专用（P3 起） */
+      if (c.roll < 0.40) return { type: 'pillar', layer: c.pick() };
+      return { type: 'gate', layer: c.pick() };
+    },
+    outro: function(c){                                              /* 7 段结构专用（P3 起） */
+      if (c.roll < 0.50) return { type: 'gate', layer: c.pick() };
+      return { type: 'orb', layer: c.pick() };
+    }
+  },
+  /* 段落 kind 的机制标签（供 SongSelect / HUD 展示"这首歌会考什么"） */
+  MECH_TAG: {
+    intro: '升降教学', verse: '脉冲球 · 闸门', chorus: '副歌开闸 · 误导体',
+    bridge: '同调长音', climax: 'Drop 俯冲 · 双闸门',
+    preChorus: '蓄能 · 连环柱', outro: '终章终结拍'
+  },
+  /* 决策入口：按 kind 取词汇表规则 */
+  rules: function(kind, c){ var f = ChartGen.RULES[kind]; return f ? f(c) : null; },
+  /* 与页面 dseq 同族的线性同余发生器（同 gen_causeway.js 的 lcg ⇒ 谱面可复现） */
+  lcg: function(seed){
+    var s = (seed >>> 0) || 1;
+    return function(){ s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+  },
+  /* 段落种子：与生成器一致（0xC0A5E7 异或 index×黄金比） */
+  seedOf: function(index){ return (0xC0A5E7 ^ ((index * 2654435761) >>> 0)) >>> 0; },
+  /* 已行进距离 D(t)：分段常量速度的闭式积分（镜像 Track.distAt / 生成器 distAt） */
+  distAt: function(ss, t){
+    var d = 0;
+    for (var i = 0; i < ss.length; i++){
+      var s = ss[i], a = Math.min(t, s.t1), b = s.t0;
+      if (a > b) d += (s.speed != null ? s.speed : CW.BASE) * (a - b);
+    }
+    return d;
+  },
+  /* ---- 执行器：段落列表 + onset 表 → 障碍数组 ----
+     chart 需含 { sections, onsets, spb | bpm, bar, track.z0 }；输出与谱面 schema 同构。
+     ▸ 段落边界按 bars 累计 + 全精度 BAR 重建（谱面里 t0/t1 存的是 4 位小数，
+       直接用会让 distAt 累积出 ~0.001 的舍入差）⇒ 与生成器逐位一致。 */
+  build: function(chart, opt){
+    opt = opt || {};
+    var raw = chart.sections || [];
+    if (!raw.length) return [];
+    var ON = (chart.onsets || []).map(function(o){ return (o && o.t != null) ? o.t : o; });
+    var SPB = 60 / (chart.bpm || 158);
+    var BAR = chart.bar || (4 * SPB);
+    var Z0 = (chart.track && chart.track.z0 != null) ? chart.track.z0 : CW.Z_START;
+    /* 归一化段落：全精度 t0/t1（bars 累计优先，缺则退回谱面值） */
+    var ss = [], acc = 0;
+    for (var n = 0; n < raw.length; n++){
+      var s = raw[n];
+      var nb = (s.bars != null) ? s.bars : Math.round((s.t1 - s.t0) / BAR);
+      var t0 = (s.bars != null) ? acc * BAR : s.t0;
+      var t1 = (s.bars != null) ? (acc + nb) * BAR : s.t1;
+      ss.push({ index: (s.index != null) ? s.index : n, kind: s.kind, t0: t0, t1: t1, bars: nb,
+                energy: s.energy, density: s.density,
+                speed: (s.speed != null) ? s.speed : ((s.energy >= 0.85) ? CW.SPRINT : CW.BASE) });
+      acc += nb;
+    }
+    var out = [], oid = 0;
+
+    /* onset 吸附：偏离半拍以上宁缺毋滥（严格小于 ⇒ 平局取先入者，同生成器） */
+    function nearestOnset(t){
+      var best = null, bd = 1e9;
+      for (var i = 0; i < ON.length; i++){ var d = Math.abs(ON[i] - t); if (d < bd){ bd = d; best = ON[i]; } }
+      return (bd <= SPB * 0.5) ? best : null;
+    }
+    function push(t, type, layer){
+      var ot = nearestOnset(t);
+      if (ot == null) return;
+      var answer = (type === 'gate' || type === 'pillar') ? (layer === 'lo' ? 'hi' : 'lo')
+                 : (type === 'orb') ? layer
+                 : (type === 'twin') ? 'hold' : 'ignore';      /* decoy */
+      out.push({ id: 'o' + (oid++), beat: +((ot / SPB)).toFixed(3), t: +ot.toFixed(4),
+                 z: +(Z0 - ChartGen.distAt(ss, ot)).toFixed(3), type: type,
+                 layer: (type === 'twin') ? 'both' : layer, answer: answer });
+    }
+
+    for (var si = 0; si < ss.length; si++){
+      var sec = ss[si];
+      var rng = ChartGen.lcg(ChartGen.seedOf(sec.index));
+      var interval = Math.max(1, Math.min(8, Math.round(1 / (sec.density || 1))));   /* 拍 */
+      var b0 = Math.round(sec.t0 / BAR), b1 = Math.round(sec.t1 / BAR);
+      var st = (si === 0) ? sec.t0 + 4 * BAR : sec.t0;      /* 前奏留 4 小节铺垫 */
+      for (var b = b0; b < b1; b++){
+        for (var k = 0; k < 4; k += interval){
+          var t = st + ((b - b0) * 4 + k) * SPB;
+          if (t < sec.t0 || t >= sec.t1 - SPB * 0.5) continue;
+          var roll = rng();
+          var ctx = { roll: roll, pick: function(){ return rng() < 0.5 ? 'lo' : 'hi'; },
+                      b: b, b1: b1, t: t, kind: sec.kind, sec: sec };
+          var dec = ChartGen.rules(sec.kind, ctx);
+          if (dec) push(t, dec.type, dec.layer);
+        }
+      }
+    }
+    if (!opt.noSort) out.sort(function(a, b){ return a.t - b.t; });
+    return out;
+  },
+  /* ---- 自证：用本模块重建 causeway 障碍，与谱面内既有 obstacles 逐字段比对 ---- */
+  verify: function(chart){
+    chart = chart || Chart.data; if (!chart || !chart.obstacles) return null;
+    var got = ChartGen.build(chart), exp = chart.obstacles;
+    var keys = ['t', 'type', 'layer', 'answer', 'beat', 'z'];
+    var bad = [];
+    if (got.length !== exp.length) bad.push({ why: 'count', got: got.length, exp: exp.length });
+    for (var i = 0; i < Math.min(got.length, exp.length); i++){
+      for (var ki = 0; ki < keys.length; ki++){
+        var kk = keys[ki];
+        if (got[i][kk] !== exp[i][kk]){ bad.push({ why: 'field', i: i, key: kk, got: got[i][kk], exp: exp[i][kk] }); break; }
+      }
+      if (bad.length > 8) break;
+    }
+    return { ok: bad.length === 0, got: got.length, exp: exp.length, bad: bad };
   }
 };
 
@@ -3788,6 +4055,69 @@ var CWResult = {
     if (CWResult.el) CWResult.el.classList.remove('on');
   },
   info: function(){ return { open: CWResult.open, rank: CWResult.open ? CWScore.rank() : null }; }
+};
+
+/* ==========================================================================
+   P1 · 曲目选择浮层（SongSelect）——「换歌即换关」的入口
+   --------------------------------------------------------------------------
+   为什么需要它：单赛道引擎真正的能力（音乐结构 → 机制分派）只有在**换一首歌**
+   时才被看见。本浮层列出 TRACKS 中已就绪的曲目；选曲 = 设 CW.track 后切回同一场景
+   （**同场景换曲** ⇒ 不碰四场景几何、天然规避 R1 定帧红线）。
+   · 就绪判定：TRACKS[id].ready —— 资产未生成时置灰不可选，避免 fetch 失败产生空谱面；
+   · 纯 DOM 浮层：不新增任何 three 对象 ⇒ 对 draw call / 定帧画面零影响。
+   ========================================================================== */
+var SongSelect = {
+  el: null,
+  ensure: function(){
+    if (SongSelect.el) return SongSelect.el;
+    var d = document.createElement('div'); d.id = 'songsel';
+    d.innerHTML = '<div class="card">' +
+      '<div class="hd">选择歌曲</div>' +
+      '<div class="sub">同一引擎 · 换一首歌，换一套玩法</div>' +
+      '<div class="list"></div>' +
+      '<div class="bts"><b data-act="close">返回</b></div>' +
+      '<div class="hint">曲目由「音乐结构 → 机制」实时翻译：段落不同 ⇒ 障碍 / 镜头 / 预判都不同</div>' +
+      '</div>';
+    document.body.appendChild(d);
+    SongSelect.el = d;
+    d.addEventListener('click', function(e){
+      var t = e.target; if (!t || !t.closest) return;
+      var row = t.closest('#songsel .tk');
+      if (row){ if (!row.classList.contains('off')) SongSelect.pick(row.getAttribute('data-track')); return; }
+      if (t.closest('#songsel .bts b')) SongSelect.close();
+    });
+    return d;
+  },
+  render: function(){
+    var d = SongSelect.ensure(), host = d.querySelector('.list');
+    host.innerHTML = '';
+    Object.keys(TRACKS).forEach(function(id){
+      var tk = TRACKS[id], sn = trackSong(tk);
+      var row = document.createElement('div');
+      row.className = 'tk' + (tk.ready ? '' : ' off') + ((CW.track && CW.track.id === id) ? ' cur' : '');
+      row.setAttribute('data-track', id);
+      var tags = (tk.tags || []).map(function(x){ return '<i>' + x + '</i>'; }).join('');
+      row.innerHTML =
+        '<div class="nm"><b>' + sn.name + '</b>' +
+          '<s>' + sn.artist + ' · ' + tk.segs + ' 段结构' + (tk.ready ? '' : ' · 资产生成中') + '</s>' +
+          '<div class="tags">' + tags + '</div></div>' +
+        '<div class="mt"><b>' + sn.bpm + ' BPM</b><s>' + (sn.total || '--:--') + '</s></div>';
+      host.appendChild(row);
+    });
+    return d;
+  },
+  open: function(){ SongSelect.render().classList.add('on'); },
+  close: function(){ if (SongSelect.el) SongSelect.el.classList.remove('on'); },
+  isOpen: function(){ return !!(SongSelect.el && SongSelect.el.classList.contains('on')); },
+  /* 选曲：设上下文 → 重进场景（M1.enter 会按 CW.track 重新加载 BGM / 谱面 / 节拍时钟） */
+  pick: function(id){
+    var tk = TRACKS[id]; if (!tk || !tk.ready) return false;
+    CW.track = tk;
+    SongSelect.close();
+    setScene('causeway');
+    return true;
+  },
+  info: function(){ return { open: SongSelect.isOpen(), track: CW.track ? CW.track.id : null }; }
 };
 
 /* ==========================================================================
@@ -4551,7 +4881,9 @@ var M1 = {
     CWResult.reset();                /* M3-CW·P5：切场景即关结算面板（含「返回枢纽」路径） */
     Feedback.reset();                /* P0：清判定飘字 / 脉动 */
     if (k === 'causeway'){
-      Chart.load(); BGM.start();     /* M3-CW：加载真值谱面 + 起播 BGM（待首个用户手势） */
+      /* P1：曲目上下文驱动加载（默认 superweave ⇒ 路径与现状一致，门禁零漂移） */
+      var tk = CW.track || TRACKS.superweave;
+      Chart.load(tk.chart); BGM.use(tk.bgm);
       CWScore.reset();
       Lens.reset();                  /* M3-CW·P4：相机复位（fov 归 70 + 贴回 chase ⇒ 修往返后 fov 残留） */
       CWAnt.reset();                 /* M3-CW·P4：清预判窗口 / 押注 / amo */
@@ -4574,7 +4906,9 @@ var M1 = {
       }
     }
     if (sd && sd.pad){ sd.pad.userData.t = 0; sd.pad.scale.setScalar(1); }
-    BeatClock.setSong(SONGS[(LEVELS[k] && LEVELS[k].song) || 'sunny']);
+    /* 单赛道关的节拍时钟跟随所选曲目（P1：默认仍为 superweave，口径不变） */
+    var _sid = (k === 'causeway' && CW.track) ? CW.track.song : ((LEVELS[k] && LEVELS[k].song) || 'sunny');
+    BeatClock.setSong(SONGS[_sid]);
     HUD.markDirty();
   },
   interact: function(){
@@ -4656,6 +4990,30 @@ window.__cwSeek = function(t){
 };
 /* M3-CW·P4 调试 / 门禁钩子：镜头状态机 + 同调自动松手 */
 window.__cwChart = function(){ return Chart.data; };
+/* P1 · ChartGen 自证钩子：用运行时机制词汇表重建当前谱面障碍并与内嵌 obstacles 比对。
+   全等 ⇒ "同一套词汇表"成立（换歌即换关的实现层证据）。 */
+window.__cwGenCheck = function(){ return ChartGen.verify(Chart.data); };
+window.__ChartGen = ChartGen;
+/* P1 · 换曲调试 / 门禁钩子：__cwSong('song2') → 设曲目上下文并按新上下文重进场景。
+   资产未就绪时默认拒绝（避免把运行态切进"空谱面"）；force=true 可强制（仅供调试）。 */
+window.__cwSong = function(id, force){
+  var tk = TRACKS[id]; if (!tk) return { error: 'unknown-track', id: id };
+  if (!tk.ready && !force) return { error: 'not-ready', id: id, ready: false };
+  CW.track = tk;
+  if (SCN.causeway) setScene('causeway');
+  return { id: tk.id, ready: tk.ready, bgm: BGM.path, chart: Chart.path,
+           loaded: Chart.ready, sections: Chart.data ? Chart.data.sections.length : 0,
+           segs: tk.segs, bpm: trackSong(tk).bpm };
+};
+/* P1 · 曲库清单（供 SongSelect / 门禁查看"换歌即换关"的可选曲目） */
+window.__cwTracks = function(){
+  return Object.keys(TRACKS).map(function(id){
+    var t = TRACKS[id];
+    return { id: t.id, ready: t.ready, segs: t.segs, bgm: t.bgm, chart: t.chart,
+             title: trackSong(t).name, bpm: trackSong(t).bpm };
+  });
+};
+window.__SongSelect = SongSelect;
 window.__cwLensInfo = function(){ return Lens.info(); };
 window.__cwLens = function(name){ return Lens.toLens(name, null); };
 window.__cwLensFixed = function(on){ Lens.fixed = !!on; if (on) Lens.cur = Lens.cur || 'chase'; return Lens.fixed; };
@@ -4693,6 +5051,7 @@ window.__info = function(){
              track: Track.info() };
   /* M3-CW：单赛道运行时快照（供 causeway 门禁 / 调试） */
   out.cw = { chart: Chart.ready, bgm: BGM.playing, audio: actx ? actx.state : null,
+             track: CW.track ? CW.track.id : null, chartPath: Chart.path, bgmPath: BGM.path,
              songT: +Track.songT.toFixed(3),
              energy: +Track.energy.toFixed(2), section: (Track.section ? Track.section.kind : null),
              resonate: CWInput.resonating, zOf: +Track.zOf(Track.songT).toFixed(2),
