@@ -340,6 +340,20 @@
   #songsel .bts b:hover{background:rgba(255,255,255,.22)}
   #songsel .hint{margin-top:calc(16*var(--px));text-align:center;font-size:calc(18*var(--px));
     font-weight:600;letter-spacing:.04em;color:rgba(255,255,255,.44)}
+  /* ---- P5 · 上传你的歌：虚线上传行 + 分析进度条（纯 DOM / 零 draw call）---- */
+  #songsel .tk.up{border-style:dashed;border-color:rgba(125,232,255,.44);background:rgba(125,232,255,.08)}
+  #songsel .tk.up:hover{background:rgba(125,232,255,.16);border-color:rgba(125,232,255,.72)}
+  #songsel .tk.up .mt b{font-size:calc(30*var(--px));color:#BFEFFF}
+  #songsel .tk.up .tags i{border-color:rgba(140,255,200,.42);background:rgba(140,255,200,.14);color:#C8FFE4}
+  #songsel .pg{margin-top:calc(16*var(--px));height:calc(10*var(--px));border-radius:calc(999*var(--px));
+    background:rgba(255,255,255,.12);overflow:hidden;display:none}
+  #songsel .pg.on{display:block}
+  #songsel .pg i{display:block;height:100%;width:0;border-radius:calc(999*var(--px));
+    background:linear-gradient(90deg,#7DE8FF,#8CFFC8);transition:width .12s linear}
+  #songsel .pg.bad i{background:#FF7A7A}
+  #songsel .pgt{margin-top:calc(8*var(--px));text-align:center;font-size:calc(18*var(--px));
+    font-weight:700;letter-spacing:.04em;color:rgba(255,255,255,.52);display:none}
+  #songsel .pgt.on{display:block}
   /* ---- P2·CWMech：运行时机制表现层（纯 DOM / 零 draw call；M1 开闸 / M2 DROP 大字 / M5 航线 chip）---- */
   #cwmech{--px:calc(100vh / 941);position:fixed;inset:0;pointer-events:none;z-index:15;
     opacity:0;transition:opacity .2s;font-family:inherit}
@@ -3504,9 +3518,20 @@ var BGM = {
     }
     BGM.start();
   },
+  /* P5：直接投喂已解码缓冲（运行时上传的歌）——与 use(path) 同语义：
+     换"源"才重置（RK5：避免串曲），否则直接起播；默认路径零漂移。 */
+  useBuffer: function(buf, key){
+    if (!buf) return false;
+    var k = key || ('buffer:' + (buf.duration || 0).toFixed(3) + ':' + (buf.sampleRate || 0) + ':' + (buf.length || 0));
+    if (k !== BGM.path){ BGM.stop(); BGM.path = k; bgmAB = null; loadBGM._l = true; }
+    bgmBuf = buf;
+    BGM.start();
+    return true;
+  },
   start: function(){
     BGM.want = true;
-    if (!actx){ loadBGM(); return; }             /* 尚无声手势 → 仅预取，待 initAudio 续播 */
+    /* 尚无声手势 → 仅预取，待 initAudio 续播；已有解码缓冲则静候（不 fetch 非 URL 的 path） */
+    if (!actx){ if (!bgmBuf) loadBGM(); return; }
     initMusicBus();
     if (!bgmBuf){ loadBGM(); bgmDecode(); return; }
     if (BGM.playing) return;
@@ -3723,6 +3748,374 @@ var ChartGen = {
       if (bad.length > 8) break;
     }
     return { ok: bad.length === 0, got: got.length, exp: exp.length, bad: bad };
+  }
+};
+
+/* ==========================================================================
+   P5 · 运行时音频分析器（AudioAnalyzer / SectionGrammar / ChartBuilder）
+   --------------------------------------------------------------------------
+   主张（P5「真实歌 = 数据源」）：**任意一首歌 → 与预烘焙谱面同构的一张谱面**。
+   与 tools/gen_causeway.js 的离线路径共用同一消费端（Chart.set / ChartGen.build）
+   ⇒「换歌即换关」对用户自己上传的歌同样成立（消费端零改动）。
+
+   确定性（门禁可复现）三条：
+     ① 自实现 radix-2 FFT（N=1024 / HOP=512 / Hann）——不依赖 AnalyserNode 实时漂移；
+     ② 自实现线性插值重采样到固定 SR=22050 —— 与设备采样率解耦；
+     ③ 固定阈值 + Float64 顺序累加 + 稳定排序（平局取先入）—— 双次分析逐字节一致。
+   网格原点 = t0（与段落/小节同轴）⇒ 障碍、小节线、段落边界共轴，无需相位估计。
+   红线：分析器**只读**音频、只写自身输出；不触碰既有场景几何（R1/R3 零漂移）。
+   ⚠ 本模块与 tools/gen_causeway.js 的「段落 → 机制」契约由 ChartGen 统一承载，勿在此另起。
+   ========================================================================== */
+var AA = {
+  SR: 22050, N: 1024, HOP: 512,
+  BPM_MIN: 60, BPM_MAX: 200, BPM_PRIOR: 120, BPM_OCT: 0.62,
+  MAX_SEC: 600, _ctx: null, _tab: null
+};
+/* 解码上下文：离线优先（不受自动播放策略约束）→ 失败回落到主 AudioContext */
+function aaDecodeCtx(){
+  if (AA._ctx) return AA._ctx;
+  try { AA._ctx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, 1, AA.SR); }
+  catch(e){ AA._ctx = null; }
+  if (!AA._ctx){
+    try { AA._ctx = actx || new (window.AudioContext || window.webkitAudioContext)(); }
+    catch(e2){ AA._ctx = null; }
+  }
+  return AA._ctx;
+}
+/* FFT 查表（位反转 + 旋转因子）——构造一次、全程复用 ⇒ 无浮点累积差异 */
+function aaTables(){
+  if (AA._tab) return AA._tab;
+  var N = AA.N, bits = Math.round(Math.log(N) / Math.LN2);
+  var rev = new Int32Array(N), cos = new Float64Array(N >> 1), sin = new Float64Array(N >> 1);
+  for (var i = 0; i < N; i++){
+    var r = 0;
+    for (var b = 0; b < bits; b++) if (i & (1 << b)) r |= 1 << (bits - 1 - b);
+    rev[i] = r;
+  }
+  for (var k = 0; k < (N >> 1); k++){ cos[k] = Math.cos(-2 * Math.PI * k / N); sin[k] = Math.sin(-2 * Math.PI * k / N); }
+  AA._tab = { N: N, rev: rev, cos: cos, sin: sin };
+  return AA._tab;
+}
+function aaFft(re, im){
+  var T = aaTables(), N = T.N, rev = T.rev, cos = T.cos, sin = T.sin, t;
+  for (var i = 0; i < N; i++){ var j = rev[i]; if (j > i){ t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; } }
+  for (var len = 2; len <= N; len <<= 1){
+    var half = len >> 1, tw = N / len;
+    for (var s = 0; s < N; s += len){
+      for (var k = 0; k < half; k++){
+        var c = cos[k * tw], sn = sin[k * tw], a = s + k, b = a + half;
+        var xr = re[b] * c - im[b] * sn, xi = re[b] * sn + im[b] * c;
+        re[b] = re[a] - xr; im[b] = im[a] - xi; re[a] += xr; im[a] += xi;
+      }
+    }
+  }
+}
+/* 线性插值重采样（srcSR == dstSR ⇒ 直通；定长输出 ⇒ 可复现） */
+function aaResample(pcm, srcSR, dstSR){
+  if (!pcm || srcSR === dstSR) return pcm;
+  var ratio = srcSR / dstSR, n = Math.max(1, Math.floor(pcm.length / ratio));
+  var out = new Float64Array(n);
+  for (var i = 0; i < n; i++){
+    var x = i * ratio, i0 = Math.floor(x), fr = x - i0;
+    var a = pcm[i0] || 0, b = (i0 + 1 < pcm.length) ? pcm[i0 + 1] : 0;
+    out[i] = a + (b - a) * fr;
+  }
+  return out;
+}
+/* 秒 → mm:ss */
+function aaFmtTime(sec){
+  var m = Math.floor(sec / 60), s = Math.round(sec % 60);
+  if (s === 60){ m++; s = 0; }
+  return (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+}
+
+var AudioAnalyzer = {
+  _hann: null,
+  hann: function(){
+    if (AudioAnalyzer._hann) return AudioAnalyzer._hann;
+    var N = AA.N, w = new Float64Array(N);
+    for (var i = 0; i < N; i++) w[i] = 0.5 - 0.5 * Math.cos(2 * Math.PI * i / (N - 1));
+    AudioAnalyzer._hann = w; return w;
+  },
+  /* ArrayBuffer → AudioBuffer（传副本：decodeAudioData 会 detach，保证同一份可重复分析） */
+  decode: function(ab){
+    var ctx = aaDecodeCtx();
+    if (!ctx || !ctx.decodeAudioData) return Promise.reject(new Error('no-decode-ctx'));
+    return new Promise(function(res){
+      var copy = ab.slice(0);
+      var ret = ctx.decodeAudioData(copy, function(buf){ res(buf); }, function(){ res(null); });
+      if (ret && ret.then) ret.then(function(b){ res(b); }, function(){ res(null); });
+    });
+  },
+  /* 多声道 → 单声道（算术平均，顺序固定 ⇒ 可复现） */
+  mono: function(buf){
+    var n = buf.length, ch = buf.numberOfChannels, i, c;
+    if (ch <= 1){ var c1 = new Float32Array(n); c1.set(buf.getChannelData(0)); return c1; }
+    var out = new Float32Array(n);
+    for (c = 0; c < ch; c++){ var d = buf.getChannelData(c); for (i = 0; i < n; i++) out[i] += d[i] / ch; }
+    return out;
+  },
+  /* 入口：ArrayBuffer → { buffer(可播放), meta, feat(特征) } */
+  analyze: function(ab, onProgress){
+    var self = this;
+    return self.decode(ab).then(function(buf){
+      if (!buf) throw new Error('decode-failed');
+      var sr0 = buf.sampleRate || AA.SR;
+      var pcm = aaResample(self.mono(buf), sr0, AA.SR);
+      var feat = self._features(pcm);
+      feat.sr = AA.SR; feat.bufferSR = sr0;
+      if (onProgress) onProgress(1);
+      return { buffer: buf, feat: feat, meta: { sr: sr0, duration: feat.duration } };
+    });
+  },
+  /* ---- 帧级特征：Hann 窗 → FFT → { RMS, 谱通量, 谱心 } ---- */
+  _features: function(pcm){
+    var N = AA.N, HOP = AA.HOP, SR = AA.SR, FR = SR / HOP, w = this.hann();
+    var len = pcm.length, cap = AA.MAX_SEC * SR;
+    if (len > cap) len = cap;
+    var nF = Math.max(1, Math.floor((len - N) / HOP) + 1);
+    var re = new Float64Array(N), im = new Float64Array(N);
+    var rms = new Float64Array(nF), flux = new Float64Array(nF), cent = new Float64Array(nF);
+    var prev = new Float64Array(N >> 1), cur = new Float64Array(N >> 1);
+    for (var f = 0; f < nF; f++){
+      var off = f * HOP, se = 0;
+      for (var i = 0; i < N; i++){ var s = (off + i < len) ? pcm[off + i] : 0; re[i] = s * w[i]; im[i] = 0; se += re[i] * re[i]; }
+      aaFft(re, im);
+      var m = N >> 1, fl = 0, cn = 0, cd = 0;
+      for (var k = 0; k < m; k++){
+        var mag = Math.sqrt(re[k] * re[k] + im[k] * im[k]);
+        cur[k] = mag;
+        var d = mag - prev[k]; if (d > 0) fl += d;              /* 半波整流谱通量 = onset 强度 */
+        cn += mag * (k / m); cd += mag;                        /* 谱心（归一化 0..1） */
+      }
+      flux[f] = fl; cent[f] = (cd > 1e-9) ? cn / cd : 0; rms[f] = Math.sqrt(se / N);
+      var tmp = prev; prev = cur; cur = tmp;                   /* 交换缓冲，零分配 */
+    }
+    var rmax = 0, fmax = 0;
+    for (var a = 0; a < nF; a++){ if (rms[a] > rmax) rmax = rms[a]; if (flux[a] > fmax) fmax = flux[a]; }
+    if (rmax < 1e-9) rmax = 1; if (fmax < 1e-9) fmax = 1;
+    for (var b2 = 0; b2 < nF; b2++){ rms[b2] /= rmax; flux[b2] /= fmax; }   /* 幅值归一 ⇒ 与整体响度无关 */
+    var dur = len / SR, tempo = this.tempo(flux, FR), bpm = tempo.bpm, spb = 60 / bpm;
+    return { frameR: FR, nF: nF, rms: rms, flux: flux, cent: cent, duration: dur,
+             bpm: bpm, spb: spb, lag: tempo.lag, rawBpm: tempo.raw, onsetT: this.onsets(flux, FR, spb, dur) };
+  },
+  /* ---- 速度估计：onset 包络自相关 × 对数正态先验（抑制倍/半速八度错误）→ 八度归一 ---- */
+  tempo: function(flux, FR){
+    var lagMin = Math.max(2, Math.round(FR * 60 / AA.BPM_MAX));
+    var lagMax = Math.max(lagMin + 1, Math.round(FR * 60 / AA.BPM_MIN));
+    var n = flux.length, best = lagMin, bestScore = -1, bestBpm = AA.BPM_PRIOR;
+    for (var lag = lagMin; lag <= lagMax; lag++){
+      var s = 0, cnt = 0;
+      for (var i = lag; i < n; i++){ s += flux[i] * flux[i - lag]; cnt++; }
+      if (!cnt) continue;
+      var ac = s / cnt, bpm0 = 60 * FR / lag;
+      var oct = Math.log(bpm0 / AA.BPM_PRIOR) / Math.LN2;
+      var prior = Math.exp(-0.5 * (oct / AA.BPM_OCT) * (oct / AA.BPM_OCT));
+      var score = ac * prior;
+      if (score > bestScore){ bestScore = score; best = lag; bestBpm = bpm0; }
+    }
+    var bpm = bestBpm;
+    while (bpm >= 180) bpm /= 2;
+    while (bpm < 70) bpm *= 2;
+    return { bpm: +bpm.toFixed(3), raw: +bestBpm.toFixed(3), lag: best };
+  },
+  /* ---- onset 表：拍网格（原点 = t0，与段落/小节同轴）+ 包络局部极大 ⇒ 供 build 吸附 ---- */
+  onsets: function(flux, FR, spb, dur){
+    var out = [], seen = {};
+    for (var n = 0; n * spb < dur - 1e-3; n++){
+      var t = +(n * spb).toFixed(4);
+      if (seen[t]) continue; seen[t] = 1;
+      var i0 = Math.round(t * FR);
+      out.push({ t: t, strength: +((i0 >= 0 && i0 < flux.length) ? flux[i0] : 0).toFixed(3) });
+    }
+    for (var i = 1; i < flux.length - 1; i++){
+      if (flux[i] <= flux[i - 1] || flux[i] < flux[i + 1]) continue;
+      if (flux[i] < 0.22) continue;
+      var tt = +(i / FR).toFixed(4);
+      if (seen[tt]) continue; seen[tt] = 1;
+      out.push({ t: tt, strength: +flux[i].toFixed(3) });
+    }
+    out.sort(function(a, b){ return (a.t - b.t) || (a.strength - b.strength); });
+    return out;
+  },
+  /* 帧级区间均值（供段落能量 / 8 分窗特征） */
+  mean: function(arr, FR, t0, t1){
+    var i0 = Math.max(0, Math.floor(t0 * FR)), i1 = Math.min(arr.length, Math.ceil(t1 * FR));
+    if (i1 <= i0) return 0;
+    var s = 0; for (var i = i0; i < i1; i++) s += arr[i];
+    return s / (i1 - i0);
+  }
+};
+
+/* ---- 段落语法：能量块 → 段落类型（强制模板，保证 preChorus + outro 恒存在）----
+   规则（确定性、无随机）：① 首 = intro、尾 = outro；② 副歌 = 能被"预副歌"占前位的
+   区间内能量最高者；③ 高潮 = 副歌之后的内部槽能量最高者（可缺）；④ 其余内部槽按能量
+   中位数切 verse / bridge。短歌退化：K<4 走 intro→(preChorus|chorus)→outro。 */
+var SectionGrammar = {
+  LABEL: { intro: '前奏 · 升降教学', verse: '主歌 · 脉冲球闸门', preChorus: '预副歌 · 蓄能',
+           chorus: '副歌 · 开闸', bridge: '桥段 · 同调', climax: '高潮 · 俯冲', outro: '终章 · 终结拍' },
+  SPECIAL: { intro: 'tutorial', outro: 'cadence', climax: 'dropslam', preChorus: 'charge' },
+  chunk: function(bars){ return bars >= 96 ? 16 : (bars >= 40 ? 8 : 4); },
+  kinds: function(E, K){
+    var kind = new Array(K), i;
+    if (K <= 1) return ['intro'];
+    if (K === 2) return ['intro', 'outro'];
+    if (K === 3) return ['intro', 'chorus', 'outro'];
+    for (i = 0; i < K; i++) kind[i] = null;
+    kind[0] = 'intro'; kind[K - 1] = 'outro';
+    var cLo = 2, cHi = K - 2;                     /* chorus ∈ [2, K-2] ⇒ 其前位必为内部槽（非 intro） */
+    if (cLo > cHi) cLo = cHi;
+    var chorus = cLo;
+    for (i = cLo; i <= cHi; i++) if (E[i] > E[chorus]) chorus = i;      /* 严格 > ⇒ 平局取先入 */
+    kind[chorus] = 'chorus'; kind[chorus - 1] = 'preChorus';
+    var climax = -1;
+    for (i = chorus + 1; i <= K - 2; i++){ if (kind[i]) continue; if (climax < 0 || E[i] > E[climax]) climax = i; }
+    if (climax >= 0) kind[climax] = 'climax';
+    var rest = [];
+    for (i = 1; i <= K - 2; i++) if (!kind[i]) rest.push(i);
+    if (rest.length){
+      var vals = rest.map(function(x){ return E[x]; }).slice().sort(function(a, b){ return a - b; });
+      var med = vals[Math.floor(vals.length / 2)];
+      for (i = 0; i < rest.length; i++) kind[rest[i]] = (E[rest[i]] >= med) ? 'verse' : 'bridge';
+    }
+    return kind;
+  }
+};
+
+/* ---- 谱面装配：分析特征 + 段落类型 → 完整谱面（顶层 schema 与 assets/*-chart.json 同构）---- */
+var ChartBuilder = {
+  PENTA: [0, 2, 4, 7, 9],                       /* 五声音阶：长音/弹琴共用（与 CWMech.PENTA 同族） */
+  build: function(feat, meta){
+    meta = meta || {};
+    var spb = feat.spb, bpm = feat.bpm, BAR = 4 * spb;
+    var bars = Math.max(4, Math.floor(feat.duration / BAR + 1e-9));
+    var chartDur = +(bars * BAR).toFixed(4);
+    var CHUNK = SectionGrammar.chunk(bars), K = Math.max(1, Math.ceil(bars / CHUNK));
+    var mean = AudioAnalyzer.mean;
+    /* 块能量（按最大值归一 ⇒ 跨歌可比）→ 段落类型 */
+    var rawE = [], Emax = 0, k, b0, b1, v;
+    for (k = 0; k < K; k++){
+      b0 = k * CHUNK; b1 = Math.min(bars, (k + 1) * CHUNK);
+      v = mean(feat.rms, feat.frameR, b0 * BAR, b1 * BAR);
+      rawE.push(v); if (v > Emax) Emax = v;
+    }
+    var En = []; for (k = 0; k < K; k++) En.push(Emax > 1e-9 ? rawE[k] / Emax : 0);
+    var kinds = SectionGrammar.kinds(En, K);
+    /* sections[]：t0/t1 严格 = 累计小节 × BAR（与生成器同口径 ⇒ distAt 无舍入差） */
+    var sections = [];
+    for (k = 0; k < K; k++){
+      b0 = k * CHUNK; b1 = Math.min(bars, (k + 1) * CHUNK);
+      var t0 = b0 * BAR, t1 = b1 * BAR;
+      var energy = +(Emax > 1e-9 ? (mean(feat.rms, feat.frameR, t0, t1) / Emax) : 0).toFixed(2);
+      sections.push({ index: k, kind: kinds[k], label: SectionGrammar.LABEL[kinds[k]] || kinds[k],
+        t0: +t0.toFixed(4), t1: +t1.toFixed(4), bars: b1 - b0, energy: energy,
+        /* 密度 → ChartGen.build 的决策间隔 round(1/density) 拍；随段落能量增密 */
+        density: +Math.max(0.20, Math.min(0.50, 0.20 + 0.30 * energy)).toFixed(2),
+        speed: (energy >= CW.SPRINT_AT) ? CW.SPRINT : CW.BASE,
+        camera: 'chase', special: SectionGrammar.SPECIAL[kinds[k]] || null });
+    }
+    /* 八分音符级特征：旋律斜率（谱心平滑一阶差分，按 |Δ| 80 分位自适应归一）+ 情绪能量 */
+    var step = spb / 2, steps = Math.max(1, Math.round(chartDur / step));
+    var sm = new Float64Array(steps), moodE = new Array(steps);
+    for (var si = 0; si < steps; si++){
+      var ta = si * step, tb = ta + step;
+      sm[si] = mean(feat.cent, feat.frameR, Math.max(0, ta - step), Math.min(chartDur, tb + step));  /* 3 步窗平滑 ⇒ 斜率连贯可辨 */
+      moodE[si] = +Math.max(0, Math.min(1, mean(feat.rms, feat.frameR, ta, tb))).toFixed(3);
+    }
+    var cd2 = new Float64Array(steps);
+    for (var sj = 1; sj < steps; sj++) cd2[sj] = sm[sj] - sm[sj - 1];
+    cd2[0] = steps > 1 ? cd2[1] : 0;
+    var ad = []; for (var ai = 0; ai < steps; ai++) ad.push(Math.abs(cd2[ai]));
+    ad.sort(function(a, b){ return a - b; });
+    var scale = ad[Math.floor(steps * 0.8)] || 1e-6;
+    var slope = new Array(steps);
+    for (var sk = 0; sk < steps; sk++) slope[sk] = +Math.max(-1, Math.min(1, cd2[sk] / scale)).toFixed(3);
+    /* 长音（sustains）：偶数小节线起、跨度 2 拍；终章内追加一个最长长音 ⇒ M4 终结拍可定位 */
+    var sustains = [], P = ChartBuilder.PENTA;
+    for (k = 0; k < K; k++){
+      var sec = sections[k];
+      if (sec.kind === 'intro' || sec.kind === 'preChorus') continue;
+      var bStart = Math.ceil(sec.t0 / BAR), bEnd = Math.floor(sec.t1 / BAR);
+      for (var bb = bStart; bb < bEnd; bb += 2){
+        var u0 = +(bb * BAR + spb).toFixed(4), u1 = +(bb * BAR + 3 * spb).toFixed(4);
+        if (u1 > chartDur - 1e-6) break;
+        sustains.push({ t0: u0, t1: u1, midi: 60 + P[bb % 5] + (sec.energy >= 0.6 ? 7 : 0) });
+      }
+    }
+    var outro = null; for (k = 0; k < K; k++) if (sections[k].kind === 'outro') outro = sections[k];
+    if (outro){
+      var ct0 = +(outro.t1 - 3 * spb).toFixed(4), ct1 = +(outro.t1 - 0.02).toFixed(4);
+      if (ct1 > ct0) sustains.push({ t0: ct0, t1: ct1, midi: 67 });     /* 3 拍跨度 ⇒ 段内最长 ⇒ cadenceIdx */
+    }
+    sustains.sort(function(a, b){ return a.t0 - b.t0; });
+    /* 预判线索（anticipations）：每个段落交界前 2 拍开窗，走向按能量升降 */
+    var ants = [];
+    for (k = 1; k < K; k++) ants.push({ at: +Math.max(0, sections[k].t0 - 2 * spb).toFixed(4),
+      dir: (sections[k].energy >= sections[k - 1].energy) ? 'up' : 'down', into: sections[k].kind, win: +(2 * spb).toFixed(4) });
+    /* 镜头线索（lensCues）：段落交界且落在 4 小节线（满足 LensArbiter 的乐句 + 冷却约束） */
+    var CYC = ['overhead', 'lateral', 'onboard'], CUE = ['melody', 'form', 'mood'], cues = [], ci = 0;
+    for (k = 1; k < K; k++){
+      var bar = Math.round(sections[k].t0 / BAR);
+      if (bar % 4 !== 0) continue;
+      cues.push({ t: +sections[k].t0.toFixed(4), bar: bar, lens: CYC[ci % CYC.length], cue: CUE[ci % CUE.length] }); ci++;
+    }
+    var chart = {
+      schema: 1, song: meta.id || 'user', title: meta.title || '你的歌',
+      bpm: bpm, spb: spb, bar: +BAR.toFixed(6), beats: bars * 4, bars: bars, duration: chartDur, sr: AA.SR,
+      track: { width: CW.W, base: CW.BASE, sprint: CW.SPRINT, sprintAt: CW.SPRINT_AT,
+               layerHi: CW.LAYER_HI, switchMs: CW.SWITCH_MS, z0: CW.Z_START },
+      sections: sections, onsets: feat.onsetT, sustains: sustains, anticipations: ants, lensCues: cues,
+      phrase: { bars: ChartBuilder.phraseBars(bars, BAR) },
+      melody: { step: +step.toFixed(6), slope: slope }, mood: { step: +step.toFixed(6), energy: moodE }
+    };
+    chart.obstacles = ChartGen.build(chart);      /* 机制词汇表落地（消费端零改动；__cwGenCheck 恒自洽） */
+    return chart;
+  },
+  phraseBars: function(bars, BAR){ var o = []; for (var b = 0; b <= bars; b += 4) o.push(+(b * BAR).toFixed(4)); return o; }
+};
+
+/* ---- 运行时曲目上下文：分析结果（谱面 + 可播放缓冲 + 元数据）暂存于此 ----
+   M1.enter 的 causeway 分支按 CW.track.runtime 判定是否走本上下文（唯一被改动的既有函数）。 */
+var RuntimeSong = {
+  chart: null, buffer: null, meta: null, id: null,
+  clear: function(){ RuntimeSong.chart = null; RuntimeSong.buffer = null; RuntimeSong.meta = null; RuntimeSong.id = null; }
+};
+
+/* ---- 用户歌曲：上传 → 分析 → 注册为一条 TRACKS / SONGS 记录（本地分析，不上传服务器）---- */
+var UserSong = {
+  busy: false, progress: 0, err: null, last: null,
+  commit: function(ab, name){
+    if (UserSong.busy) return Promise.reject(new Error('busy'));
+    UserSong.busy = true; UserSong.progress = 0; UserSong.err = null;
+    SongSelect.progress(0, name);
+    return AudioAnalyzer.analyze(ab, function(p){ UserSong.progress = p; SongSelect.progress(p, name); })
+      .then(function(res){
+        var feat = res.feat, id = 'user';
+        var title = String(name || '你的歌').replace(/\.[A-Za-z0-9]+$/, '') || '你的歌';
+        /* song 键唯一化（时长 + BPM）⇒ MelodyLane 的 (song:bars:slope.len) 签名必变 ⇒ 强制重烘焙 */
+        var songKey = 'user-' + feat.duration.toFixed(2) + '-' + feat.bpm;
+        var chart = ChartBuilder.build(feat, { id: songKey, title: title });
+        SONGS[songKey] = { name: title, artist: '你的歌', bpm: Math.round(feat.bpm),
+                           total: aaFmtTime(feat.duration), wave: 3 };
+        TRACKS[id] = { id: id, song: songKey, runtime: true, ready: true,
+                       bgm: '(uploaded)', chart: '(runtime)', segs: chart.sections.length,
+                       tags: [chart.sections.length + ' 段结构', Math.round(feat.bpm) + ' BPM', '实时分析'] };
+        RuntimeSong.chart = chart; RuntimeSong.buffer = res.buffer;
+        RuntimeSong.meta = { name: String(name || ''), feat: feat }; RuntimeSong.id = id;
+        UserSong.busy = false; UserSong.progress = 1;
+        SongSelect.progress(1, name);
+        var summary = { id: id, song: songKey, title: title, bpm: feat.bpm, bars: chart.bars,
+                        duration: chart.duration, sections: chart.sections.length,
+                        kinds: chart.sections.map(function(s){ return s.kind; }),
+                        obstacles: chart.obstacles.length };
+        UserSong.last = summary;
+        return summary;
+      })
+      .catch(function(e){
+        UserSong.busy = false; UserSong.err = String(e);
+        SongSelect.progress(-1, name);
+        return { error: 'analyze-failed', detail: String(e) };
+      });
   }
 };
 
@@ -4359,13 +4752,25 @@ var SongSelect = {
       '<div class="hd">选择歌曲</div>' +
       '<div class="sub">同一引擎 · 换一首歌，换一套玩法</div>' +
       '<div class="list"></div>' +
+      '<div class="pg"><i></i></div>' +
+      '<div class="pgt"></div>' +
       '<div class="bts"><b data-act="close">返回</b></div>' +
       '<div class="hint">曲目由「音乐结构 → 机制」实时翻译：段落不同 ⇒ 障碍 / 镜头 / 预判都不同</div>' +
       '</div>';
     document.body.appendChild(d);
     SongSelect.el = d;
+    /* P5：隐藏文件输入 —— 「上传你的歌」的唯一入口（FileReader 全程本机，绝不上传服务器） */
+    var fi = document.createElement('input');
+    fi.type = 'file'; fi.accept = 'audio/*,.mp3,.wav,.m4a,.ogg'; fi.style.display = 'none';
+    fi.addEventListener('change', function(){
+      var f = fi.files && fi.files[0]; fi.value = '';
+      if (f) SongSelect.upload(f);
+    });
+    d.appendChild(fi); SongSelect._fi = fi;
     d.addEventListener('click', function(e){
       var t = e.target; if (!t || !t.closest) return;
+      var up = t.closest('#songsel .tk.up');
+      if (up){ if (!UserSong.busy) fi.click(); return; }                  /* P5：上传你的歌 */
       var row = t.closest('#songsel .tk');
       if (row){ if (!row.classList.contains('off')) SongSelect.pick(row.getAttribute('data-track')); return; }
       if (t.closest('#songsel .bts b')) SongSelect.close();
@@ -4388,6 +4793,15 @@ var SongSelect = {
         '<div class="mt"><b>' + sn.bpm + ' BPM</b><s>' + (sn.total || '--:--') + '</s></div>';
       host.appendChild(row);
     });
+    /* P5：上传入口（始终置于末尾；分析中置灰） */
+    var up = document.createElement('div');
+    up.className = 'tk up' + (UserSong.busy ? ' off' : '');
+    up.setAttribute('data-upload', '1');
+    up.innerHTML = '<div class="nm"><b>上传你的歌</b>' +
+      '<s>MP3 / WAV / M4A · 本地实时分析，不上传服务器</s>' +
+      '<div class="tags"><i>实时分析</i><i>结构自动识别</i></div></div>' +
+      '<div class="mt"><b>＋</b><s>ADD</s></div>';
+    host.appendChild(up);
     return d;
   },
   open: function(){ SongSelect.render().classList.add('on'); },
@@ -4401,7 +4815,33 @@ var SongSelect = {
     setScene('causeway');
     return true;
   },
-  info: function(){ return { open: SongSelect.isOpen(), track: CW.track ? CW.track.id : null }; }
+  /* P5：读本地文件 → 分析 → 注册 → 直接开玩（FileReader 全程本机，无网络） */
+  upload: function(file){
+    if (!file || UserSong.busy) return false;
+    var fr = new FileReader();
+    SongSelect.progress(0, file.name);
+    fr.onload = function(){
+      UserSong.commit(fr.result, file.name).then(function(r){
+        if (r && !r.error){ SongSelect.pick('user'); } else { SongSelect.render(); }
+      });
+    };
+    fr.onerror = function(){ SongSelect.progress(-1, file.name); SongSelect.render(); };
+    fr.readAsArrayBuffer(file);
+    return true;
+  },
+  /* 进度条：p<0 ⇒ 失败；0..1 ⇒ 百分比（name 显示在文案里） */
+  progress: function(p, name){
+    var d = SongSelect.el; if (!d) return;
+    var pg = d.querySelector('.pg'), bar = pg && pg.querySelector('i'), txt = d.querySelector('.pgt');
+    if (!pg || !bar || !txt) return;
+    var nm = String(name || '');
+    if (p < 0){ pg.className = 'pg on bad'; bar.style.width = '100%'; txt.className = 'pgt on'; txt.textContent = '分析失败：' + nm; return; }
+    if (p >= 1){ pg.className = 'pg'; bar.style.width = '100%'; txt.className = 'pgt'; txt.textContent = ''; SongSelect.render(); return; }
+    pg.className = 'pg on'; bar.style.width = (Math.max(0, Math.min(1, p)) * 100).toFixed(0) + '%';
+    txt.className = 'pgt on'; txt.textContent = '分析中 ' + nm + ' … ' + Math.round(p * 100) + '%';
+  },
+  info: function(){ return { open: SongSelect.isOpen(), track: CW.track ? CW.track.id : null,
+                             upload: !!SongSelect._fi, busy: UserSong.busy }; }
 };
 
 /* ==========================================================================
@@ -5278,9 +5718,16 @@ var M1 = {
     CWResult.reset();                /* M3-CW·P5：切场景即关结算面板（含「返回枢纽」路径） */
     Feedback.reset();                /* P0：清判定飘字 / 脉动 */
     if (k === 'causeway'){
-      /* P1：曲目上下文驱动加载（默认 superweave ⇒ 路径与现状一致，门禁零漂移） */
+      /* P1：曲目上下文驱动加载（默认 superweave ⇒ 路径与现状一致，门禁零漂移）
+         P5：runtime 曲目（用户上传的歌）走同一注入点 Chart.set + BGM.useBuffer —— 消费端零改动 */
       var tk = CW.track || TRACKS.superweave;
-      Chart.load(tk.chart); BGM.use(tk.bgm);
+      if (tk.runtime && RuntimeSong.chart){
+        Chart.set(RuntimeSong.chart);
+        if (RuntimeSong.buffer) BGM.useBuffer(RuntimeSong.buffer, 'runtime:' + tk.id);
+        else BGM.stop();
+      } else {
+        Chart.load(tk.chart); BGM.use(tk.bgm);
+      }
       CWScore.reset();
       if (typeof CWMech !== 'undefined') CWMech.reset();   /* P2：清机制状态（副歌开闸 / Drop / 航线 / 音区）*/
       Lens.reset();                  /* M3-CW·P4：相机复位（fov 归 70 + 贴回 chase ⇒ 修往返后 fov 残留） */
@@ -5414,6 +5861,32 @@ window.__cwTracks = function(){
   });
 };
 window.__SongSelect = SongSelect;
+/* P5 · 运行时分析器调试 / 门禁钩子 ---------------------------------------- */
+window.__RuntimeSong = RuntimeSong;
+window.__UserSong = UserSong;
+window.__AudioAnalyzer = AudioAnalyzer;
+window.__ChartBuilder = ChartBuilder;
+window.__SectionGrammar = SectionGrammar;
+/* 纯探针：url → 分析 → 谱面（不注册、不切场景）—— 供门禁做「双次分析逐字节一致」判定 */
+window.__analyze = function(url, name){
+  return fetch(url).then(function(r){ return r.arrayBuffer(); }).then(function(ab){
+    return AudioAnalyzer.analyze(ab).then(function(res){
+      var chart = ChartBuilder.build(res.feat, { id: (name || 'probe'), title: (name || 'probe') });
+      return { chart: chart, bpm: res.feat.bpm, duration: res.feat.duration, bars: chart.bars,
+               sections: chart.sections.length, kinds: chart.sections.map(function(s){ return s.kind; }),
+               obstacles: chart.obstacles.length };
+    });
+  });
+};
+window.__analyzeChart = function(){ return RuntimeSong.chart; };
+/* 端到端：url → 分析 → 注册为 user 曲目 → 进 causeway（证明"消费端零改动"） */
+window.__useUser = function(url, name){
+  return fetch(url).then(function(r){ return r.arrayBuffer(); })
+    .then(function(ab){ return UserSong.commit(ab, name || url); })
+    .then(function(res){ if (res && !res.error) SongSelect.pick('user'); return res; });
+};
+window.__uploadCommit = function(ab, name){ return UserSong.commit(ab, name); };
+/* -------------------------------------------------------------------------- */
 window.__cwMech = CWMech;   /* P2：运行时机制调试钩子（供 mech.js 断言 M1/M2/M5/M6） */
 window.__cwLensInfo = function(){ return Lens.info(); };
 window.__cwLens = function(name){ return Lens.toLens(name, null); };
