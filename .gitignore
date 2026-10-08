@@ -15,8 +15,10 @@ out/
 # 静态部署包（构建产物，不入库；由 声浪星球.html + three.min.js + assets/ 组装）
 dist/
 
-# P5 · 真实歌曲压力测试样本（仅本地测试；版权红线 R6：不入库 / 不部署 / 不打包）
-# 注：分析结论报告 docs/真实歌分析-压力测试报告.md 仅含指标数字，可入库；以下仅为音频样本隔离
+# P5/P6 · 本地测试样本隔离（不入库 / 不部署 / 不打包）
+# 注：两首 CC-BY 说唱已按许可「转正」入库：assets/rap-galactic.mp3 / assets/rap-christmas.mp3
+#     （Kevin MacLeod / incompetech.com，CC BY 4.0，署名见 声浪星球.html 与 README）。
+#     以下规则继续隔离「仅本地、未署名」的临时样本。
 assets/local-*.wav
 assets/local-*.mp3
 assets/local-*.m4a

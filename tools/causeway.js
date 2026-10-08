@@ -62,9 +62,13 @@ const URL = 'http://127.0.0.1:8777/%E5%A3%B0%E6%B5%AA%E6%98%9F%E7%90%83.html';
     if (fz.jump && fz.jump.on) fails.push('定帧下 jump.on 应为 false');
   }
 
-  /* ---- ② 自动前进 ---- */
+  /* ---- ② 自动前进 ----
+     本文件是「金标 causeway 谱面」回归（⑥–⑫ 的判定时间轴全部写死为 superweave 谱面），
+     P6 默认曲改为说唱后必须在此显式钉住 superweave，否则测的是另一张谱面。 */
   await page.goto(URL + '?scene=causeway', { waitUntil: 'load', timeout: 60000 });
   await page.waitForTimeout(600);
+  await page.evaluate(() => window.__cwSong('superweave'));
+  await page.waitForTimeout(1100);
   const z0 = await page.evaluate(() => window.__info().m1.heroZ);
   await page.waitForTimeout(2000);
   const m1 = await page.evaluate(() => window.__info().m1);

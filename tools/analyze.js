@@ -22,7 +22,7 @@
 const { chromium } = require('playwright-core');
 
 const URL = 'http://127.0.0.1:8777/%E5%A3%B0%E6%B5%AA%E6%98%9F%E7%90%83.html';
-const GOLD = { track: 'superweave', chart: 'assets/causeway-chart.json', bgm: 'assets/causeway.wav' };
+const GOLD = { track: 'rapGalactic', chart: 'assets/rap-galactic-chart.json', bgm: 'assets/rap-galactic.mp3' };
 const SAMPLE = 'assets/song2.wav';       /* 本地样本；真实歌压力测试样本另行本地留档（gitignore） */
 const SAMPLE_BPM = 112;
 
@@ -59,11 +59,11 @@ const SAMPLE_BPM = 112;
   console.log('SongSelect.info = ' + JSON.stringify(ssinfo));
   ok(ssinfo && ssinfo.upload === true, '① SongSelect 上传入口未接线（隐藏 file input 缺失）');
 
-  /* ---------------- ② M7 自证回归（golden causeway） ---------------- */
-  console.log('=== ② M7 词汇表自证回归（golden causeway）===');
+  /* ---------------- ② M7 自证回归（默认谱面 = rapGalactic） ---------------- */
+  console.log('=== ② M7 词汇表自证回归（默认谱面）===');
   const gen0 = await page.evaluate(() => window.__cwGenCheck());
-  console.log('golden genCheck = ' + JSON.stringify(gen0));
-  ok(gen0 && gen0.ok === true && gen0.exp === 180, '② golden causeway 自证回归失败: ' + JSON.stringify(gen0));
+  console.log('default genCheck = ' + JSON.stringify(gen0));
+  ok(gen0 && gen0.ok === true && gen0.exp === 125, '② 默认谱面自证回归失败（rapGalactic 应为 125 障碍）: ' + JSON.stringify(gen0));
 
   /* ---------------- ③ 确定性：双次分析逐字节一致 ---------------- */
   console.log('=== ③ 确定性（双次分析逐字节一致）+ tempo 有效性 ===');

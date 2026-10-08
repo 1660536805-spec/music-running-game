@@ -2653,11 +2653,13 @@ function minimap(){ return '<div class="hud map"><div class="dial"></div><div cl
 var HUD_DEF = {
   home: function(){
     return '<div class="hud title"><h1>声浪星球</h1><p>用音乐，探索更远的世界</p><div class="menu">' +
-      '<button class="primary" data-go="desert"><span class="ic">▶</span>开始旅程</button>' +
-      '<button data-go="causeway"><span class="ic">⚡</span>超频长阶</button>' +
+      '<button class="primary" data-go="causeway"><span class="ic">⚡</span>超频长阶</button>' +
       '<button data-songsel="1"><span class="ic">♫</span>选择歌曲</button>' +
       '<button data-go="home"><span class="ic">▣</span>星球图鉴</button>' +
-      '<button data-go="home"><span class="ic">⚙</span>设置</button></div></div>';
+      '<button data-go="home"><span class="ic">⚙</span>设置</button></div>' +
+      /* 署名：说唱曲目素材为 CC BY 4.0，按许可要求标注作者与来源 */
+      '<p style="margin:16px 0 0;font-size:11px;line-height:1.5;opacity:.5;letter-spacing:.02em">' +
+      '音乐：Kevin MacLeod (incompetech.com) · CC BY 4.0</p></div>';
   },
   desert: function(){ return musicCard(SONGS.sunny, '01:24', '04:29') + taskCard() + runBtn() + rbtns(); },
   cave: function(){
@@ -2859,10 +2861,9 @@ addEventListener('keydown', function(e){
       if (e.code === 'ArrowRight' || e.code === 'KeyD'){ e.preventDefault(); if (Lane.request( 1, cur)) laneCue(); }
     }
   }
+  /* P6 单模式化：仅保留 1(home) / 5(超频长阶) 两个场景快捷键；
+     desert/cave/base 作为内部回归场景保留，由 ?scene= 与 __setScene 驱动。 */
   if (e.key === '1') setScene('home');
-  if (e.key === '2') setScene('desert');
-  if (e.key === '3') setScene('cave');
-  if (e.key === '4') setScene('base');
   if (e.key === '5') setScene('causeway');
   if (e.key === 'f' || e.key === 'F') M1.interact();
   if (e.key === 'm' || e.key === 'M'){ if (!actx) initAudio(); toggleMute(); }   /* P0-模块F：全局静音开关 */
@@ -3117,13 +3118,17 @@ var SONGS = {
   superweave: { name: '超频长阶', artist: 'Soundwave Planet', bpm: 158, total: '01:37', wave: 7.3 },
   /* P1 · 第二首预烘焙曲（换歌即换关的正面证据）：7 段结构、不同 BPM / 和弦 / 机制分派。
      assets 由 tools/gen_causeway.js 生成；ready:false 期间 SongSelect 置灰，生成后翻 true。 */
-  song2: { name: '银翼回响', artist: 'Soundwave Planet', bpm: 112, total: '01:48', wave: 3.4 }
+  song2: { name: '银翼回响', artist: 'Soundwave Planet', bpm: 112, total: '01:48', wave: 3.4 },
+  /* P6 · 说唱曲目（真实歌）—— 素材 Kevin MacLeod / incompetech.com，CC BY 4.0（见 README 署名）。
+     谱面由运行时分析器一次烘焙落盘（assets/rap-*-chart.json），与「上传你的歌」同一条 ChartBuilder 链路。 */
+  rapGalactic:  { name: 'Galactic Rap',  artist: 'Kevin MacLeod', bpm: 117, total: '02:22', wave: 4.4 },
+  rapChristmas: { name: 'Christmas Rap', artist: 'Kevin MacLeod', bpm: 89,  total: '03:07', wave: 3.2 }
 };
 
 /* ---- 单赛道引擎曲库（CW.track 的注册表）------------------------------------
    与 SONGS 分工：SONGS 是"显示用元数据"（名/艺人/BPM/时长/波形），TRACKS 是
    "单赛道引擎可加载的曲目"（BGM 路径 + 真值谱面路径 + 指向 SONGS 的 song 键）。
-   默认曲 = superweave ⇒ 路径与现状逐位一致（门禁零漂移）。
+   默认曲 = rapGalactic（P6 起：真实说唱歌，谱面经里程归一 ⇒ 全曲里程 ≤ 赛道容量）。
    ready 标志：资产未就绪时 SongSelect 不允许切换，避免 fetch 失败导致空谱面。 */
 var TRACKS = {
   superweave: { id: 'superweave', song: 'superweave',
@@ -3133,11 +3138,20 @@ var TRACKS = {
   song2:      { id: 'song2', song: 'song2',
                 bgm: 'assets/song2.wav', chart: 'assets/song2-chart.json',
                 segs: 7, ready: true,
-                tags: ['7 段结构', '预副歌蓄能', '终章终结拍'] }
+                tags: ['7 段结构', '预副歌蓄能', '终章终结拍'] },
+  /* P6 · 说唱曲目（真实歌，CC BY 4.0）：9 段结构；谱面经 ChartBuilder 里程归一（全曲 ≤ 赛道容量） */
+  rapGalactic:  { id: 'rapGalactic', song: 'rapGalactic',
+                  bgm: 'assets/rap-galactic.mp3', chart: 'assets/rap-galactic-chart.json',
+                  segs: 9, ready: true,
+                  tags: ['真实歌 · 实时分析', '9 段结构', '副歌开闸'] },
+  rapChristmas: { id: 'rapChristmas', song: 'rapChristmas',
+                  bgm: 'assets/rap-christmas.mp3', chart: 'assets/rap-christmas-chart.json',
+                  segs: 9, ready: true,
+                  tags: ['真实歌 · 实时分析', '9 段结构', '终章终结拍'] }
 };
 /* 当前曲目上下文（M1.enter 的 causeway 分支据此加载 BGM / 谱面 / 段落时钟）。
-   默认 = superweave ⇒ 与既有写死路径行为完全一致。 */
-CW.track = TRACKS.superweave;
+   默认 = rapGalactic（P6 单模式化后的开场曲）。 */
+CW.track = TRACKS.rapGalactic;
 /* 便捷取用：曲目显示元数据（名/艺人/BPM/时长/wave），供 musicCard / BeatClock 使用 */
 function trackSong(tk){ tk = tk || CW.track; return SONGS[(tk && tk.song) || 'superweave'] || SONGS.superweave; }
 function trackTotal(tk){ var s = trackSong(tk); return s.total || '--:--'; }
@@ -3298,10 +3312,16 @@ var Track = {
     if (typeof m1Sfx === 'function') m1Sfx('uiClick');
     Bus.emit('cw:bump', { dir: dir });
   },
-  /* 前进速度：能量 ≥0.85 的段落自动冲刺（P2 接入 Chart.mood.energy；P1 固定基础速） */
+  /* 前进速度：能量 ≥ sprintAt 的段落自动冲刺。
+     P6：基数取自**谱面**（chart.track.base/sprint）而非全局常量 —— 长曲经里程归一后
+     仍能在固定长度赛道内跑完全曲；缺省回落 CW.* ⇒ causeway / song2 数值逐位不变。 */
   speed: function(){
     if (!Track.isCw(cur)) return CFG.SPEED_F;
-    return (Track.energy >= CW.SPRINT_AT) ? CW.SPRINT : CW.BASE;
+    var tk = (Chart.data && Chart.data.track) || null;
+    var base = (tk && tk.base     != null) ? tk.base     : CW.BASE;
+    var spr  = (tk && tk.sprint   != null) ? tk.sprint   : CW.SPRINT;
+    var sat  = (tk && tk.sprintAt != null) ? tk.sprintAt : CW.SPRINT_AT;
+    return (Track.energy >= sat) ? spr : base;
   },
   energy: 0,                                  /* P2 起由 Chart 写入当前段落能量 */
   update: function(dt, k){
@@ -4059,10 +4079,20 @@ var ChartBuilder = {
       if (bar % 4 !== 0) continue;
       cues.push({ t: +sections[k].t0.toFixed(4), bar: bar, lens: CYC[ci % CYC.length], cue: CUE[ci % CUE.length] }); ci++;
     }
+    /* P6 · 里程归一：赛道物理长度是常量（CW.Z_START − CW.Z_END），而歌曲时长可变。
+       长曲按同一比例压缩 base/sprint ⇒ 全曲里程 ≤ 赛道容量，避免"人停在路尽头、歌还在放、
+       后段障碍悬在虚空"。短曲 f = 1 ⇒ causeway(1263.8m) / song2(1191.4m) 数值逐位不变。 */
+    var AVAIL = CW.Z_START - CW.Z_END;
+    var natural = 0;
+    for (k = 0; k < K; k++) natural += sections[k].speed * (sections[k].t1 - sections[k].t0);
+    var fN = (natural > AVAIL) ? (AVAIL / natural) * 0.9999 : 1;
+    var baseN = +(CW.BASE * fN).toFixed(4), sprintN = +(CW.SPRINT * fN).toFixed(4);
+    if (fN !== 1) for (k = 0; k < K; k++)
+      sections[k].speed = (sections[k].speed === CW.SPRINT) ? sprintN : baseN;
     var chart = {
       schema: 1, song: meta.id || 'user', title: meta.title || '你的歌',
       bpm: bpm, spb: spb, bar: +BAR.toFixed(6), beats: bars * 4, bars: bars, duration: chartDur, sr: AA.SR,
-      track: { width: CW.W, base: CW.BASE, sprint: CW.SPRINT, sprintAt: CW.SPRINT_AT,
+      track: { width: CW.W, base: baseN, sprint: sprintN, sprintAt: CW.SPRINT_AT,
                layerHi: CW.LAYER_HI, switchMs: CW.SWITCH_MS, z0: CW.Z_START },
       sections: sections, onsets: feat.onsetT, sustains: sustains, anticipations: ants, lensCues: cues,
       phrase: { bars: ChartBuilder.phraseBars(bars, BAR) },
@@ -5623,7 +5653,11 @@ var Lens = {
     var px = fo[0] + (off[0] - fo[0]) * e, py = fo[1] + (off[1] - fo[1]) * e, pz = fo[2] + (off[2] - fo[2]) * e;
     var lx = fl[0] + (look[0] - fl[0]) * e, ly = fl[1] + (look[1] - fl[1]) * e, lz = fl[2] + (look[2] - fl[2]) * e;
     /* FOV 随速度/能量向 92 插值（速度感的主要来源，设计 §3.3） */
-    var spr = clamp((Track.speed() - CW.BASE) / (CW.SPRINT - CW.BASE), 0, 1);
+    /* P6：冲刺系数同样以**谱面**基数为准（缺省回落 CW.* ⇒ 既有曲目数值不变） */
+    var _ct = (Chart.data && Chart.data.track) || null;
+    var _cb = (_ct && _ct.base   != null) ? _ct.base   : CW.BASE;
+    var _cs = (_ct && _ct.sprint != null) ? _ct.sprint : CW.SPRINT;
+    var spr = (_cs > _cb) ? clamp((Track.speed() - _cb) / (_cs - _cb), 0, 1) : 0;
     var en = clamp(Track.energy, 0, 1);
     var drive = clamp(0.7 * spr + 0.3 * Math.max(0, en - CW.SPRINT_AT) / (1 - CW.SPRINT_AT), 0, 1);
     var fovT = G.fov + (92 - G.fov) * drive;

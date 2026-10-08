@@ -3,8 +3,8 @@
    ----------------------------------------------------------------------------
    为什么单列：causeway.js 断言的是「P2–P5 那条单赛道链路」（定帧 / 前进 / 判定 / 镜头 /
    结算），它的 14 个断言块是**金标契约**，机制迭代不应改写它。本脚本只做**增量**断言：
-     ① M7 · ChartGen 自证：运行时「机制词汇表」重建 causeway 障碍必须与谱面内嵌
-        obstacles 逐字段一致（180/180）。这是"同一套词汇表驱动预烘焙与运行时两条谱面
+     ① M7 · ChartGen 自证：运行时「机制词汇表」重建默认谱面障碍必须与谱面内嵌
+        obstacles 逐字段一致（rapGalactic 125/125）。这是"同一套词汇表驱动预烘焙与运行时两条谱面
         来源"的实现层证据 —— 换一首歌，换的不是曲包，是机制组合。
      ② 曲库注册表：≥2 首、段落数不同 ⇒ "换歌即换关"有可选性。
      ③ 默认路径零漂移：不换歌时曲目上下文 / BGM / 谱面路径必须是金标路径。
@@ -27,7 +27,7 @@
 const { chromium } = require('playwright-core');
 
 const URL = 'http://127.0.0.1:8777/%E5%A3%B0%E6%B5%AA%E6%98%9F%E7%90%83.html';
-const GOLD = { track: 'superweave', chart: 'assets/causeway-chart.json', bgm: 'assets/causeway.wav' };
+const GOLD = { track: 'rapGalactic', chart: 'assets/rap-galactic-chart.json', bgm: 'assets/rap-galactic.mp3' };
 
 (async () => {
   const browser = await chromium.launch({
@@ -76,6 +76,18 @@ const GOLD = { track: 'superweave', chart: 'assets/causeway-chart.json', bgm: 'a
     console.log('   段落数分布 = ' + JSON.stringify(tracks.map(t => t.id + ':' + t.segs + '段')));
   }
 
+  /* ②b 里程归一防复发（P6）：默认曲全曲自然里程必须 ≤ 赛道容量（CW.Z_START − CW.Z_END = 1264m）。
+     赛道物理长度是常量；长曲必须靠「按谱面归一速度」压进容量，否则人会停在路尽头、后段障碍悬空。 */
+  const CAP = 1264;
+  const nat = await page.evaluate(() => {
+    const c = window.__cwChart(); if (!c || !c.sections) return null;
+    let d = 0;
+    for (let i = 0; i < c.sections.length; i++){ const s = c.sections[i]; d += (s.speed || 0) * ((s.t1 || 0) - (s.t0 || 0)); }
+    return { dist: d, base: (c.track && c.track.base) || null, dur: c.duration };
+  });
+  console.log('②b 默认曲里程 = ' + JSON.stringify(nat) + ' / 赛道容量 ' + CAP + 'm');
+  ok(nat && nat.dist > 0 && nat.dist <= CAP + 0.01, '②b 默认曲自然里程溢出赛道容量（会停在路尽头）: ' + JSON.stringify(nat));
+
   /* ---------------- ③ 默认路径零漂移 ---------------- */
   console.log('=== ③ 默认路径零漂移（金标契约）===');
   const cw = await page.evaluate(() => window.__info().cw);
@@ -87,10 +99,10 @@ const GOLD = { track: 'superweave', chart: 'assets/causeway-chart.json', bgm: 'a
 
   /* ---------------- ④ 换歌链路（已就绪曲目） ---------------- */
   console.log('=== ④ 换歌链路（切到已就绪曲目）===');
-  const sw = await page.evaluate(() => window.__cwSong('superweave'));
+  const sw = await page.evaluate(id => window.__cwSong(id), GOLD.track);
   await page.waitForTimeout(1200);
   const afterSw = await page.evaluate(() => ({ cw: window.__info().cw, cur: window.__info().cur }));
-  console.log('__cwSong(superweave) = ' + JSON.stringify(sw));
+  console.log('__cwSong(' + GOLD.track + ') = ' + JSON.stringify(sw));
   console.log('  → cur=' + afterSw.cur + ' track=' + afterSw.cw.track + ' chart=' + afterSw.cw.chart);
   ok(sw && !sw.error, '④ 切到已就绪曲目被拒: ' + JSON.stringify(sw));
   ok(afterSw.cur === 'causeway', '④ 换歌后未停留在 causeway: ' + afterSw.cur);
@@ -180,6 +192,10 @@ const GOLD = { track: 'superweave', chart: 'assets/causeway-chart.json', bgm: 'a
   console.log('=== ⑤b 运行时机制（M1 副歌开闸 / M2 Drop / M5 航线 / M6 弹琴）===');
   await page.evaluate(() => window.__cwSong('superweave'));   /* 确保 causeway 上下文（⑤ / ⑤a 可能切过歌） */
   await page.waitForTimeout(900);
+  /* causeway M7 自证：默认曲换说唱后，原 ① 的 180/180 契约改在此处（显式 superweave 上下文）断言 */
+  const genCw = await page.evaluate(() => window.__cwGenCheck());
+  console.log('causeway genCheck = ' + JSON.stringify(genCw));
+  ok(genCw && genCw.ok === true && genCw.exp === 180, '⑤b causeway ChartGen 自证失败: ' + JSON.stringify(genCw));
   const seek = t => page.evaluate(tv => window.__cwSeek(tv), t);
   const mech = () => page.evaluate(() => window.__info().cw.mech);
   const secs = await page.evaluate(() => (window.__cwChart() || {}).sections || []);

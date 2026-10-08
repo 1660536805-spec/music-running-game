@@ -32,10 +32,10 @@ const { chromium } = require('playwright-core');
   await page.keyboard.press('1');
   await page.waitForTimeout(400);
   const hud1 = await page.evaluate(() => document.querySelector('#huds .hudLayer .title h1') ? document.querySelector('#huds .hudLayer .title h1').textContent : null);
-  await page.keyboard.press('3');
+  await page.evaluate(() => window.__setScene('cave'));
   await page.waitForTimeout(400);
   const prompt = await page.evaluate(() => !!document.querySelector('#huds .hudLayer .prompt'));
-  await page.keyboard.press('4');
+  await page.evaluate(() => window.__setScene('base'));
   await page.waitForTimeout(400);
   const map = await page.evaluate(() => !!document.querySelector('#huds .hudLayer .map'));
 

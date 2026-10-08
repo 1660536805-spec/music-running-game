@@ -17,8 +17,8 @@ python3 -m http.server 8777 --bind 127.0.0.1
 open "http://127.0.0.1:8777/声浪星球.html"
 ```
 
-- 首次进入是**枢纽大厅**：点「**超频长阶**」（或按 `5`）进入音游关卡；点「**选择歌曲**」打开曲目浮层（含"上传你的歌"）。
-- 快捷键：`1` 枢纽 · `2` 沙漠 · `3` 洞穴 · `4` 基地 · `5` 超频长阶。
+- 首次进入是**枢纽大厅**（单模式）：点「**超频长阶**」（或按 `5`）进入音游关卡，**默认曲目 Galactic Rap**；点「**选择歌曲**」打开曲目浮层（4 首内置曲 + "上传你的歌"）。
+- 快捷键：`1` 枢纽 · `5` 超频长阶。（`desert / cave / base` 为内部回归场景，经 `?scene=` 进入，不占快捷键。）
 - 首次点击画面后音频才会解锁（浏览器手势策略，属预期行为）。
 - 无构建、无打包、无依赖安装：`three.min.js` 与 `assets/*.glb` 均为本地资源。
 
@@ -54,15 +54,17 @@ open "http://127.0.0.1:8777/声浪星球.html"
 
 ## 换歌即换关：运行时音频分析器
 
-内置 `SongSelect` 曲目浮层提供三首曲目，另有 **"上传你的歌"** 入口：
+内置 `SongSelect` 曲目浮层提供**四首**内置曲目（2 首程序化合成 + 2 首真实说唱），另有 **"上传你的歌"** 入口：
 
 - 选择本地 `MP3 / WAV / M4A` → **本地实时分析**（自实现 FFT + 重采样，不依赖 `AnalyserNode` / `OfflineAudioContext`，结果可复现）→ 现场生成段落 / 障碍 / 预判 / 航线 / 情绪 → **直接开跑**。
-- **不上传服务器、不入库、不打包**（版权红线 R6：受版权曲目仅本地分析）。
+- **用户上传的歌仅在本地分析、不上传服务器**（版权红线 R6）。内置曲目则**只用可授权素材**（自研合成曲 + **CC-BY 并署名**），可随仓库 / 部署包一起分发。
 
 | 谱面来源 | 段数 | 说明 |
 |---|---|---|
-| 《超频长阶》causeway（预烘焙关卡） | 5 段 | intro → verse → chorus → bridge → climax |
-| song2（预烘焙曲目） | 7 段 | 含 preChorus / outro，答辩"换歌即换关"对照 |
+| **Galactic Rap**（真实说唱 · **默认曲**） | 9 段 | Kevin MacLeod · CC BY 4.0；谱面由运行时分析器一次烘焙落盘，经**里程归一** ⇒ 全曲 ≤ 赛道容量 |
+| **Christmas Rap**（真实说唱） | 9 段 | 同上；段落含 preChorus / outro |
+| 《超频长阶》causeway（预烘焙关卡） | 5 段 | intro → verse → chorus → bridge → climax（**备选曲目**） |
+| song2（预烘焙曲目） | 7 段 | 含 preChorus / outro，答辩"换歌即换关"对照（**备选曲目**） |
 | **运行时分析器（任意歌）** | 4–7 段 | 段落模板由能量分析决定，K≥4 时强制保证 preChorus + outro |
 
 > 全链路消费端（判定 / 计分 / 镜头 / 结算）**零改动**——它们只读同一份 `Chart.data` schema。
@@ -80,7 +82,7 @@ open "http://127.0.0.1:8777/声浪星球.html"
 | 2 | 零报错 | `tools/playtest.js` | 跳跃 `lifted=true`、场景切换 OK、**零控制台报错** |
 | 4 | 视觉回归·展示 | `tools/showcase.js` | 四宫格展示模式无回归 |
 | 5 | causeway 关 | `tools/causeway.js` | **14 组断言**全 PASS（定帧基线 + 判定 + 段落镜头 + 预判 + 同调 + 结算） |
-| 7 | 运行时机制 | `tools/mech.js` | M1–M7 机制断言 + `genCheck` 契约（causeway 180/180 · song2 116/116） |
+| 7 | 运行时机制 | `tools/mech.js` | M1–M7 机制断言 + `genCheck` 契约（默认 rapGalactic 125/125 · causeway 180/180 · song2 116/116） |
 | 8 | 音频分析器 | `tools/analyze.js` | 默认路径零漂移 · 分析**逐字节确定** · 上传链路 · 运行时谱面完整性 · 机制联动 |
 
 **运行前置**（macOS / 本项目脚本约定）：
@@ -114,9 +116,13 @@ $NODE tools/analyze.js
 ├── three.min.js               # Three.js r128（本地，无 CDN 依赖）
 ├── index.html                 # 项目入口页
 ├── assets/                    # 谱面 JSON + 音频 + .glb 模型
-│   ├── causeway-chart.json    #   《超频长阶》金标谱面（5 段）
+│   ├── rap-galactic.mp3       #   Galactic Rap（CC-BY，默认曲）
+│   ├── rap-galactic-chart.json#   说唱金标谱面（9 段，运行时分析器烘焙）
+│   ├── rap-christmas.mp3      #   Christmas Rap（CC-BY）
+│   ├── rap-christmas-chart.json
+│   ├── causeway-chart.json    #   《超频长阶》金标谱面（5 段，备选）
 │   ├── causeway.wav           #   同源真值音频
-│   ├── song2-chart.json       #   song2 金标谱面（7 段）
+│   ├── song2-chart.json       #   song2 金标谱面（7 段，备选）
 │   ├── song2.wav
 │   └── *.glb                  #   低多边形场景模型
 ├── tools/                     # 生成器 + 门禁（Node + Playwright）
@@ -140,7 +146,7 @@ $NODE tools/analyze.js
 - **R3 操作零写入**：玩家输入不写入任何持久状态。
 - **R4 单文件无构建**：交付物是可直接运行的 HTML，无打包步骤。
 - **R5 音频需手势解锁**：遵循浏览器自动播放策略。
-- **R6 免费不侵犯版权**：真实歌**仅本地分析**，不上传、不入库、不部署、不打包。
+- **R6 不侵犯版权**：内置曲**只用可授权素材**——自研合成曲 + **CC-BY 曲目（Kevin MacLeod / incompetech.com，按许可署名）**，可入库、可部署；用户"上传任意歌"仍**仅本地分析**，不上传、不内置其音频。
 
 ---
 
