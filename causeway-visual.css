@@ -1,0 +1,56 @@
+/* Galactic Rap reference, 1060 × 594. Keep this theme scoped to the running game. */
+body.causeway-visual {--u:min(calc(100vw / 1060),calc(100dvh / 594));background:#0b1030}
+.causeway-visual .hudLayer,.causeway-visual #cwhud {--px:var(--u)}
+.causeway-visual .music {left:calc(24 * var(--u));top:0;width:calc(267 * var(--u));height:calc(96 * var(--u));padding:calc(18 * var(--u));gap:calc(16 * var(--u));border:0;border-radius:calc(24 * var(--u));background:rgba(16,30,60,.25);box-shadow:none;backdrop-filter:none}
+.causeway-visual .music .cover {width:calc(60 * var(--u));height:calc(60 * var(--u));border-radius:calc(12 * var(--u))}
+.causeway-visual .music .meta .t {font-size:calc(22 * var(--u));letter-spacing:.015em}
+.causeway-visual .music .meta .a {font-size:calc(14 * var(--u));margin-top:calc(2 * var(--u))}
+.causeway-visual .music .meta .time {font-size:calc(13 * var(--u));margin-top:calc(5 * var(--u))}
+.causeway-visual .wave {height:calc(12 * var(--u));gap:calc(2 * var(--u));margin-top:calc(4 * var(--u))}
+.causeway-visual .wave i {width:calc(2 * var(--u));max-height:calc(12 * var(--u))}
+.causeway-visual .hud.cwhint {left:54%;top:calc(38 * var(--u));height:calc(49 * var(--u));padding:calc(12 * var(--u)) calc(23 * var(--u));border:0;border-radius:calc(24 * var(--u));font-size:calc(16 * var(--u));background:rgba(34,54,99,.48);box-shadow:none;opacity:1;white-space:nowrap}
+.causeway-visual .hud.cwhint kbd {font-size:calc(16 * var(--u));padding:calc(1 * var(--u)) calc(9 * var(--u));border-radius:calc(5 * var(--u));margin:0 calc(4 * var(--u))}
+.causeway-visual .hud.cwhint em {font-size:calc(24 * var(--u));margin-left:calc(10 * var(--u))}
+.causeway-visual .cwres {right:calc(43 * var(--u));bottom:calc(35 * var(--u))}
+.causeway-visual .cwres b {width:calc(98 * var(--u));height:calc(98 * var(--u));font-size:calc(20 * var(--u));border:calc(2 * var(--u)) solid rgba(194,225,255,.45);background:linear-gradient(145deg,rgba(158,205,238,.32),rgba(189,69,207,.23));box-shadow:inset 0 0 calc(22 * var(--u)) rgba(205,164,245,.18);cursor:pointer}
+.causeway-visual .cwres b.on {background:rgba(235,92,238,.55);border-color:#ffc1ff;box-shadow:0 0 calc(32 * var(--u)) #b44fc0}
+.causeway-visual #cwhud .sc {right:calc(26 * var(--u));top:calc(3 * var(--u))}
+.causeway-visual #cwhud .sc b {font-size:calc(42 * var(--u))}
+.causeway-visual #cwhud .sc s {font-size:calc(17 * var(--u));margin-top:calc(5 * var(--u))}
+.causeway-visual #cwhud .orb {right:calc(27 * var(--u));top:calc(92 * var(--u));font-size:calc(18 * var(--u))}
+.causeway-visual #cwhud .cmb {left:calc(27 * var(--u));top:calc(385 * var(--u))}
+.causeway-visual #cwhud .cmb b {font-size:calc(76 * var(--u));font-weight:700}
+.causeway-visual #cwhud .cmb s {font-size:calc(15 * var(--u));letter-spacing:.25em;color:#d2d8e4}
+.causeway-visual #cwhud .ly {left:calc(27 * var(--u));top:auto;bottom:calc(22 * var(--u));gap:calc(8 * var(--u))}
+.causeway-visual #cwhud .ly b {padding:calc(4 * var(--u)) calc(15 * var(--u));font-size:calc(18 * var(--u));letter-spacing:.07em;background:rgba(128,89,155,.27);border-color:rgba(213,179,255,.24);line-height:1.3}
+.causeway-visual #cwhud .ly .lo.on {background:rgba(62,121,193,.65);box-shadow:0 0 calc(14 * var(--u)) rgba(101,140,255,.25)}
+.causeway-visual #cwhud .bar,.causeway-visual #beatbar,.causeway-visual #cwmech .lane {display:none}
+.causeway-visual #cwhud .jd {top:56%;font-size:calc(40 * var(--u))}
+.causeway-visual #stage::after {content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 53% 91%,rgba(208,94,245,.14),transparent 28%),radial-gradient(ellipse at 9% 61%,rgba(142,70,244,.15),transparent 33%)}
+#cwlyrics {display:none;position:fixed;z-index:11;left:71.2%;top:calc(119 * var(--u));width:27.5%;pointer-events:none;color:#b4b1c8}
+.causeway-visual #cwlyrics {display:block}
+#cwlyrics p {height:calc(51 * var(--u));line-height:calc(51 * var(--u));white-space:nowrap;font-size:calc(23 * var(--u));font-weight:600;letter-spacing:.035em;opacity:.75;text-shadow:0 0 calc(3 * var(--u)) rgba(180,156,232,.4)}
+#cwlyrics p.active {font-size:calc(34 * var(--u));font-weight:700;color:#fff;opacity:1;text-shadow:0 0 calc(8 * var(--u)) #f08ae8,0 0 calc(20 * var(--u)) #ee35db}
+#cwlyrics p.distant {opacity:.40}
+#cwlyrics .lyric-axis {position:absolute;left:calc(-28 * var(--u));top:0;height:calc(244 * var(--u));width:calc(2 * var(--u));background:linear-gradient(transparent,rgba(249,137,255,.55),transparent)}
+#cwlyrics .lyric-axis i {position:absolute;left:calc(-5 * var(--u));top:calc(118 * var(--u));width:calc(12 * var(--u));height:calc(12 * var(--u));border-radius:50%;background:#fff0ff;box-shadow:0 0 calc(9 * var(--u)) #ff8cff,0 0 calc(22 * var(--u)) #fb5af5}
+@media (max-aspect-ratio:4/3) {#cwlyrics{left:66%;width:33%}#cwlyrics p{font-size:calc(18 * var(--u))}#cwlyrics p.active{font-size:calc(24 * var(--u))}.causeway-visual .hud.cwhint{top:calc(103 * var(--u));left:50%}}
+@media (prefers-reduced-motion:reduce){.causeway-visual .cwres b{transition:none}}
+.causeway-visual .hud.cwhint {width:calc(492 * var(--u));gap:calc(8 * var(--u));justify-content:center;padding-left:calc(14 * var(--u));padding-right:calc(14 * var(--u))}
+.causeway-visual .hud.cwhint kbd {margin:0;font-size:calc(16 * var(--u));padding-left:calc(8 * var(--u));padding-right:calc(8 * var(--u))}
+.causeway-visual #stage::after {background:radial-gradient(ellipse at 50% 93%,rgba(202,132,229,.21),transparent 23%),radial-gradient(ellipse at 9% 74%,rgba(130,56,240,.24),transparent 32%)}
+.causeway-visual .hud.cwhint {gap:calc(12 * var(--u))}
+@media (orientation:portrait) {
+  body.causeway-visual {--u:calc(100vw / 680)}
+  .causeway-visual #cwhud .cmb {top:auto;bottom:calc(160 * var(--u))}
+  .causeway-visual .music {width:calc(350 * var(--u))}
+  .causeway-visual .hud.cwhint {width:94vw;top:calc(112 * var(--u));gap:calc(7 * var(--u))}
+  #cwlyrics {left:54%;top:24%;width:44%}
+  #cwlyrics p {font-size:calc(20 * var(--u));height:calc(44 * var(--u));line-height:calc(44 * var(--u))}
+  #cwlyrics p.active {font-size:calc(26 * var(--u))}
+  #cwlyrics .lyric-axis {left:calc(-14 * var(--u))}
+}
+#songsel .hint a{color:#b4ecff;text-decoration:underline;text-underline-offset:3px}
+/* 英文长唱句在原右侧歌词栏内折成短行；位置、渐隐和发光沿用原画廊。 */
+.causeway-visual.vocal-english #cwlyrics p{display:flex;align-items:center;width:100%;overflow:hidden;white-space:normal;line-height:calc(21 * var(--u));font-size:calc(16 * var(--u))}
+.causeway-visual.vocal-english #cwlyrics p.active{font-size:calc(22 * var(--u));line-height:calc(24 * var(--u))}

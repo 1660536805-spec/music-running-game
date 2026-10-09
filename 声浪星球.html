@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no" />
 <link rel="icon" href="data:," />
 <title>声浪星球 · Soundwave Planet</title>
+<link rel="stylesheet" href="causeway-visual.css" />
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;height:100%;overflow:hidden;background:#BFE9FF;
@@ -300,7 +301,7 @@
     align-items:center;justify-content:center;pointer-events:none;
     background:radial-gradient(circle at 50% 40%,rgba(8,4,22,.74),rgba(3,2,10,.92))}
   #songsel.on{display:flex;pointer-events:auto}
-  #songsel .card{width:calc(880*var(--px));max-height:calc(772*var(--px));overflow:auto;
+  #songsel .card{width:calc(880*var(--px));max-height:calc(100vh - 24px);overflow:auto;
     padding:calc(38*var(--px)) calc(46*var(--px)) calc(34*var(--px));
     border-radius:calc(34*var(--px));background:rgba(14,8,34,.88);
     border:calc(2*var(--px)) solid rgba(140,255,200,.24);color:#fff;
@@ -2655,23 +2656,23 @@ function buildCauseway(){
   var S = new THREE.Scene();
   S.background = new THREE.Color(0x060912);
   S.fog = new THREE.Fog(0x0A1024, 70, 430);
-  S.add(makeSky(0x14204E, 0x3A2060, 0x0A0718));
+  S.add(makeSky(0x111735, 0x221849, 0x0B0B24));
   S.add(new THREE.HemisphereLight(0xA8C0FF, 0x1A1030, 0.62));
   var key = new THREE.DirectionalLight(0xEAF2FF, 0.85); key.position.set(-26, 64, 34); S.add(key);
   var rim = new THREE.DirectionalLight(0xFF4FD8, 0.50); rim.position.set(32, 16, -46); S.add(rim);
 
-  var midZ = CW.Z_START - CW.LEN / 2;
+  var midZ = CW.Z_START - CW.LEN / 2 + 20;
 
   /* 深层底面：给"悬空长阶"以纵深参照 */
-  add(S, new THREE.PlaneGeometry(CW.W * 40, CW.LEN), basic(0x05070E, { fog: true }),
+  add(S, new THREE.PlaneGeometry(CW.W * 40, CW.LEN + 40), basic(0x05070E, { fog: true }),
       0, -7.5, midZ, { cast: false, recv: false, rot: [-Math.PI / 2, 0, 0] });
 
   /* Lo 贴地面 / Hi 悬浮面（同一长几何，纹理沿 z 重复 64 次） */
   var loMat = basic(0xFFFFFF, { fog: true }); loMat.map = cwTex('lo');
-  add(S, new THREE.PlaneGeometry(CW.W, CW.LEN), loMat, 0, CW.FLOOR, midZ,
+  add(S, new THREE.PlaneGeometry(CW.W + 1.0, CW.LEN + 40), loMat, 0, CW.FLOOR, midZ,
       { cast: false, recv: false, rot: [-Math.PI / 2, 0, 0] });
-  var hiMat = basic(0xFFFFFF, { transparent: true, opacity: 0.78, fog: true }); hiMat.map = cwTex('hi');
-  add(S, new THREE.PlaneGeometry(CW.W - 0.5, CW.LEN), hiMat, 0, CW.LAYER_HI, midZ,
+  var hiMat = basic(0xFFFFFF, { transparent: true, opacity: 0.24, depthWrite: false, fog: true }); hiMat.map = cwTex('hi');
+  add(S, new THREE.PlaneGeometry(CW.W + 1.8, CW.LEN + 40), hiMat, 0, CW.LAYER_HI, midZ,
       { cast: false, recv: false, rot: [-Math.PI / 2, 0, 0] });
 
   /* Hi 层支撑柱（InstancedMesh ⇒ 1 次 draw call） */
@@ -2681,7 +2682,7 @@ function buildCauseway(){
     M(0x2A3350, { emissive: 0x0B1830, ei: 1 }), pN * 2);
   var _m4 = new THREE.Matrix4();
   for (var pi = 0; pi < pN; pi++){
-    var pz = CW.Z_START - pi * 24;
+    var pz = CW.Z_START - 24 - pi * 24;
     _m4.makeTranslation(-1.55, CW.LAYER_HI / 2, pz); pillars.setMatrixAt(pi * 2, _m4);
     _m4.makeTranslation( 1.55, CW.LAYER_HI / 2, pz); pillars.setMatrixAt(pi * 2 + 1, _m4);
   }
@@ -2690,20 +2691,27 @@ function buildCauseway(){
 
   /* 两侧边缘发光导轨（每层两条长条；additive + 无雾 ⇒ 霓虹感） */
   function rail(y, x, col, op){
-    return add(S, new THREE.BoxGeometry(0.10, 0.10, CW.LEN),
-      basic(col, { transparent: true, opacity: op, additive: true, fog: false, depthWrite: false }),
+    if (col === CW.HI){
+      [0.30, 0.60, 1.00].forEach(function(width, i){
+        add(S, new THREE.PlaneGeometry(width, CW.LEN + 40),
+          basic(col, { transparent:true, opacity:0.10/(i+1), additive:true, fog:false, depthWrite:false }),
+          x, y - 0.01 * (i+1), midZ, { cast:false, recv:false, rot:[-Math.PI/2,0,0] });
+      });
+    }
+    return add(S, new THREE.BoxGeometry(col === CW.HI ? 0.14 : 0.07, 0.07, CW.LEN + 40),
+      basic(col === CW.LO ? 0x2878BA : 0xFF41ED, { transparent: true, opacity: op, additive: true, fog: false, depthWrite: false }),
       x, y, midZ, { cast: false, recv: false });
   }
-  rail(CW.FLOOR + 0.05, -CW.W / 2, CW.LO, 0.85);            rail(CW.FLOOR + 0.05, CW.W / 2, CW.LO, 0.85);
-  rail(CW.LAYER_HI + 0.05, -(CW.W - 0.5) / 2, CW.HI, 0.72); rail(CW.LAYER_HI + 0.05, (CW.W - 0.5) / 2, CW.HI, 0.72);
+  rail(CW.FLOOR + 0.05, -(CW.W + 1.0) / 2, CW.LO, 0.85);            rail(CW.FLOOR + 0.05, (CW.W + 1.0) / 2, CW.LO, 0.85);
+  rail(CW.LAYER_HI + 0.05, -(CW.W + 1.8) / 2, CW.HI, 0.95); rail(CW.LAYER_HI + 0.05, (CW.W + 1.8) / 2, CW.HI, 0.95);
 
   /* 远景霓虹柱林：dseq 独立流（R2），双侧交错，提供速度参照 */
   var Rs = dseq(0xC0A5E7), cols = [CW.LO, CW.HI, CW.ACC];
   var monoGeo = new THREE.BoxGeometry(1.1, 1, 1.1); monoGeo.translate(0, 0.5, 0);
   for (var si = 0; si < 44; si++){
     var mside = (si % 2) ? 1 : -1, mcol = cols[(Rs() * 3) | 0];
-    var mo = add(S, monoGeo, M(0x141B2E, { emissive: shade(mcol, 0.22), ei: 1 }),
-      mside * (6 + Rs() * 22), -7.5, CW.Z_START - 10 - Rs() * (CW.LEN - 40),
+    var mo = add(S, monoGeo, M(0x141B2E, { emissive: shade(mcol, 0.10), ei: 1 }),
+      mside * (6 + Rs() * 22), -7.5, CW.Z_START - 42 - Rs() * (CW.LEN - 80),
       { cast: false, recv: false, scale: [0.6 + Rs() * 1.4, 6 + Rs() * 26, 0.6 + Rs() * 1.4] });
     mo.rotation.y = Rs() * 3.14;
   }
@@ -2720,15 +2728,42 @@ function buildCauseway(){
     shards.push(qm);
   }
   S.userData.shards = shards;
+  var skyline = new THREE.InstancedMesh(new THREE.BoxGeometry(0.13, 3.5, 0.13),
+    basic(0x087BB0, { transparent:true, opacity:0.30, fog:true, depthWrite:false }), 108);
+  var sm = new THREE.Matrix4();
+  for (var sk = 0; sk < 108; sk++){
+    var side = sk % 2 ? 1 : -1;
+    sm.makeTranslation(side * (2.3 + (sk % 3) * 0.4), 1.75, CW.Z_START - 3 - Math.floor(sk/2) * 24 - (sk%2)*4);
+    skyline.setMatrixAt(sk,sm);
+  }
+  skyline.instanceMatrix.needsUpdate = true; S.add(skyline);
+
 
   /* 星尘（复用 motes：1 次 draw call） */
-  var mtC1 = motes({ n: 150, color: 0xBFE8FF, w: 46, y0: 1, y1: 26, z0: 2, z1: 120, size: 0.26, opacity: 0.62 });
-  var mtC2 = motes({ n: 70, color: 0xFF9CE8, w: 70, y0: 6, y1: 34, z0: 60, z1: 220, size: 0.40, opacity: 0.42 });
+  var mtC1 = motes({ n: 85, color: 0xBFE8FF, w: 46, y0: 1, y1: 26, z0: 2, z1: 120, size: 0.09, opacity: 0.42 });
+  var mtC2 = motes({ n: 70, color: 0xFF9CE8, w: 70, y0: 6, y1: 34, z0: 60, z1: 220, size: 0.14, opacity: 0.30 });
   S.add(mtC1); S.add(mtC2); S.userData.motes = [mtC1, mtC2];
 
   /* 英雄：3.5m 窄赛道上取 0.70 缩放（身高≈1.9u），与赛道宽相称、且追尾机位占比与四场景一致 */
   var hero = createDragonAstronaut();
-  hero.scale.setScalar(0.70);
+  hero.scale.setScalar(0.90);
+  hero.traverse(function(part){
+    if (part.isMesh && part.geometry.type === 'SphereGeometry'){
+      var radius = part.geometry.parameters.radius;
+      part.geometry.dispose(); part.geometry = new THREE.SphereGeometry(radius, 24, 18);
+      part.material.flatShading = false; part.material.needsUpdate = true;
+    }
+  });
+  hero.traverse(function(part){
+    if (!part.isMesh || !part.material || part === hero.userData.shadow) return;
+    var py = part.position.y, parent = part.parent;
+    while (parent && parent !== hero){ py += parent.position.y; parent = parent.parent; }
+    if (py < 1.42){
+      part.material = part.material.clone(); part.material.transparent = true;
+      part.material.opacity = clamp(0.38 + py * 0.28, 0.46, 0.90);
+      part.material.depthWrite = false;
+    }
+  });
   hero.userData.baseY = CW.FLOOR;
   hero.position.set(0, CW.FLOOR, CW.Z_START);
   hero.rotation.y = 0;
@@ -2798,13 +2833,13 @@ function minimap(){ return '<div class="hud map"><div class="dial"></div><div cl
 var HUD_DEF = {
   home: function(){
     return '<div class="hud title"><h1>声浪星球</h1><p>用音乐，探索更远的世界</p><div class="menu">' +
-      '<button class="primary" data-go="causeway"><span class="ic">⚡</span>超频长阶</button>' +
+      '<button class="primary" data-go="causeway"><span class="ic">♫</span>歌词共鸣 · 开始</button>' +
       '<button data-songsel="1"><span class="ic">♫</span>选择歌曲</button>' +
       '<button data-codex="1"><span class="ic">▣</span>星球图鉴</button>' +
       '<button data-settings="1"><span class="ic">⚙</span>设置</button></div>' +
-      /* 署名：说唱曲目素材为 CC BY 4.0，按许可要求标注作者与来源 */
+      /* 首页简要署名；选曲页提供两首真人演唱曲的完整许可链接。 */
       '<p style="margin:16px 0 0;font-size:11px;line-height:1.5;opacity:.5;letter-spacing:.02em">' +
-      '音乐：Kevin MacLeod (incompetech.com) · CC BY 4.0</p></div>';
+      '演唱：Richard Lin《开源人之歌》 / Josh Woodward《Knock》 · 许可见选曲页</p></div>';
   },
   desert: function(){ return musicCard(SONGS.sunny, '01:24', '04:29') + taskCard() + runBtn() + rbtns(); },
   cave: function(){
@@ -2822,6 +2857,7 @@ var HUD_DEF = {
 };
 
 function buildHUD(){
+  document.body.classList.toggle('causeway-visual', !SHOWCASE && cur === 'causeway');
   var host = document.getElementById('huds');
   host.innerHTML = '';
   host.style.pointerEvents = 'none';
@@ -3274,7 +3310,9 @@ var SONGS = {
   /* P6 · 说唱曲目（真实歌）—— 素材 Kevin MacLeod / incompetech.com，CC BY 4.0（见 README 署名）。
      谱面由运行时分析器一次烘焙落盘（assets/rap-*-chart.json），与「上传你的歌」同一条 ChartBuilder 链路。 */
   rapGalactic:  { name: 'Galactic Rap',  artist: 'Kevin MacLeod', bpm: 117, total: '02:22', wave: 4.4 },
-  rapChristmas: { name: 'Christmas Rap', artist: 'Kevin MacLeod', bpm: 89,  total: '03:07', wave: 3.2 }
+  rapChristmas: { name: 'Christmas Rap', artist: 'Kevin MacLeod', bpm: 89,  total: '03:07', wave: 3.2 },
+  openSourcePeople: { name: '开源人之歌', artist: 'Richard Lin 演唱 · 庄表伟作词', bpm: 92, total: '00:30', wave: 4.2 },
+  knockVocal: { name: 'Knock', artist: 'Josh Woodward 演唱', bpm: 119, total: '00:31', wave: 5.1 }
 };
 
 /* ---- 单赛道引擎曲库（CW.track 的注册表）------------------------------------
@@ -3283,6 +3321,14 @@ var SONGS = {
    默认曲 = rapGalactic（P6 起：真实说唱歌，谱面经里程归一 ⇒ 全曲里程 ≤ 赛道容量）。
    ready 标志：资产未就绪时 SongSelect 不允许切换，避免 fetch 失败导致空谱面。 */
 var TRACKS = {
+  openSourcePeople: { id: 'openSourcePeople', song: 'openSourcePeople',
+                      bgm: 'assets/open-source-vocal-demo.mp3', chart: 'assets/open-source-vocal-chart.json',
+                      segs: 4, ready: true, demoVocal: true,
+                      tags: ['中文真人演唱', '歌词逐句同步', '句尾长音'] },
+  knockVocal: { id: 'knockVocal', song: 'knockVocal',
+                bgm: 'assets/knock-vocal-demo.mp3', chart: 'assets/knock-vocal-chart.json',
+                segs: 4, ready: true, demoVocal: true,
+                tags: ['English vocal', '密集换层', '欲言又止'] },
   superweave: { id: 'superweave', song: 'superweave',
                 bgm: 'assets/causeway.wav', chart: 'assets/causeway-chart.json',
                 segs: 5, ready: true,
@@ -3303,7 +3349,7 @@ var TRACKS = {
 };
 /* 当前曲目上下文（M1.enter 的 causeway 分支据此加载 BGM / 谱面 / 段落时钟）。
    默认 = rapGalactic（P6 单模式化后的开场曲）。 */
-CW.track = TRACKS.rapGalactic;
+CW.track = TRACKS.openSourcePeople;
 /* 便捷取用：曲目显示元数据（名/艺人/BPM/时长/wave），供 musicCard / BeatClock 使用 */
 function trackSong(tk){ tk = tk || CW.track; return SONGS[(tk && tk.song) || 'superweave'] || SONGS.superweave; }
 function trackTotal(tk){ var s = trackSong(tk); return s.total || '--:--'; }
@@ -3715,7 +3761,8 @@ var BGM = {
       var dist = (S && S.hero) ? Math.max(0, CW.Z_START - S.hero.position.z) : 0;
       var at = Track.tAtDist(dist);
       bgmT0 = actx.currentTime - at;
-      bgmSrc.start(0);
+      /* 解码稍晚时从角色已经跑到的乐句位置续播，真人歌词才能始终对口型。 */
+      bgmSrc.start(0, Math.min(at, Math.max(0, bgmBuf.duration - 0.02)));
       BGM.playing = true;
       Bus.emit('bgm:play', { at: +at.toFixed(3) });
     } catch(e){ BGM.playing = false; }
@@ -4308,7 +4355,7 @@ var UserSong = {
    仅 causeway 生效 —— 其余关仍走 Lane 换道，互不干扰。 */
 var btnRes = null;
 var CWInput = {
-  HOLD_MS: 220, _down: false, _timer: null, resonating: false,
+  HOLD_MS: 220, _down: false, _timer: null, resonating: false, heldAt: -1,
   _audio: function(){ initAudio(); if (actx && actx.state === 'suspended') actx.resume(); },
   lift: function(){ CWInput._audio(); if (Track.request(+1, cur)) Feedback.onBeatSwitch(); },   /* P1·B：踩拍换层 */
   dive: function(){ CWInput._audio(); if (Track.request(-1, cur)) Feedback.onBeatSwitch(); },   /* P1·B：踩拍换层 */
@@ -4334,6 +4381,7 @@ var CWInput = {
     CWInput._audio();
     if (CWInput.resonating) return;
     CWInput.resonating = true;
+    CWInput.heldAt = Track.songT;
     if (btnRes) btnRes.classList.add('on');
     Bus.emit('cw:resonate', { on: true });
   },
@@ -4341,7 +4389,8 @@ var CWInput = {
     if (!CWInput.resonating) return;
     CWInput.resonating = false;
     if (btnRes) btnRes.classList.remove('on');
-    Bus.emit('cw:resonate', { on: false });
+    Bus.emit('cw:resonate', { on: false, heldAt: CWInput.heldAt });
+    CWInput.heldAt = -1;
   },
   reset: function(){ CWInput.cancel(); }
 };
@@ -4773,7 +4822,7 @@ var CWReso = {
     CWReso._recount();
   },
   /* 松手：落点 ±Good 窗内的未决长音一并判定（数据里 4 对长音仅差 38 ms ⇒ 共享同一次"呼吸"） */
-  release: function(tr){
+  release: function(tr, heldAt){
     var L = CWReso._list(); if (!L.length) return false;
     if (!CWReso.done || CWReso.done.length !== L.length)
       CWReso.done = L.map(function(s){ return (s.t1 + Judge.G < Track.songT) ? 'skip' : null; });
@@ -4781,6 +4830,9 @@ var CWReso = {
     for (var i = 0; i < L.length; i++){
       if (CWReso.done[i] !== null) continue;
       var d = tr - L[i].t1, a = Math.abs(d);
+      /* 真人演唱谱要求真的跟住尾音；仅在尾拍点一下不算长音。旧谱保留原判定。 */
+      var fullVocalHold = L[i].lyric == null || (heldAt >= 0 && heldAt <= L[i].t0 + .25 && tr - heldAt >= .42);
+      if (!fullVocalHold) continue;
       if (a <= Judge.P){ CWReso.done[i] = 'perfect'; hit = true; if (i === CWMech.cadenceIdx) cad = true; }
       else if (a <= Judge.G){ CWReso.done[i] = 'good'; hit = true; if (i === CWMech.cadenceIdx) cad = true; }
     }
@@ -4816,7 +4868,7 @@ var CWReso = {
   info: function(){ return { perfect: CWReso.perfect, good: CWReso.good, miss: CWReso.miss,
     total: CWReso.total, mult: +CWScore.mult.toFixed(3), held: CWInput.resonating }; }
 };
-Bus.on('cw:resonate', function(e){ if (e && e.on === false && Track.isCw(cur)) CWReso.release(Track.songT); });
+Bus.on('cw:resonate', function(e){ if (e && e.on === false && Track.isCw(cur)) CWReso.release(Track.songT, e.heldAt); });
 
 /* ==========================================================================
    M3-CW · P5 结算面板（CWResult）—— 纯 DOM 覆盖层
@@ -4932,12 +4984,12 @@ var SongSelect = {
     var d = document.createElement('div'); d.id = 'songsel';
     d.innerHTML = '<div class="card">' +
       '<div class="hd">选择歌曲</div>' +
-      '<div class="sub">同一引擎 · 换一首歌，换一套玩法</div>' +
+      '<div class="sub">两首真人演唱 · 中英歌词决定赛道动作</div>' +
       '<div class="list"></div>' +
       '<div class="pg"><i></i></div>' +
       '<div class="pgt"></div>' +
       '<div class="bts"><b data-act="close">返回</b></div>' +
-      '<div class="hint">曲目由「音乐结构 → 机制」实时翻译：段落不同 ⇒ 障碍 / 镜头 / 预判都不同</div>' +
+      '<div class="hint">听人声换层；句尾长音按住空格并跟着尾音松开。<a href="assets/ATTRIBUTION.md" target="_blank" rel="noopener">曲目署名与许可</a></div>' +
       '</div>';
     document.body.appendChild(d);
     SongSelect.el = d;
@@ -4962,7 +5014,7 @@ var SongSelect = {
   render: function(){
     var d = SongSelect.ensure(), host = d.querySelector('.list');
     host.innerHTML = '';
-    Object.keys(TRACKS).forEach(function(id){
+    Object.keys(TRACKS).filter(function(id){ return TRACKS[id].demoVocal; }).forEach(function(id){
       var tk = TRACKS[id], sn = trackSong(tk);
       var row = document.createElement('div');
       row.className = 'tk' + (tk.ready ? '' : ' off') + ((CW.track && CW.track.id === id) ? ' cur' : '');
@@ -5522,7 +5574,7 @@ var Obstacle = {
     while (Obstacle.nextIdx < list.length && list[Obstacle.nextIdx].t <= st + Obstacle.LOOKAHEAD){
       var d = list[Obstacle.nextIdx++];
       var o = Obstacle._alloc(d.type, d.layer);
-      o.answer = d.answer; o.t = d.t; o.z = d.z; o.judged = false; o.grade = null; o.fxT = 0;
+      o.answer = d.answer; o.t = d.t; o.z = d.z; o.lyric = d.lyric; o.judged = false; o.grade = null; o.fxT = 0;
       o.mesh.position.set(0, 0, d.z);
       Obstacle.live.push(o);
     }
@@ -5649,7 +5701,7 @@ var MelodyLane = {
     var on = !!(typeof CWMech !== 'undefined' && CWMech.laneOn);
     if (on !== MelodyLane._on){
       MelodyLane._on = on;
-      MelodyLane.mesh.material.opacity = on ? 0.90 : 0.42;
+      MelodyLane.mesh.material.opacity = on ? 0.20 : 0.08;
     }
   },
   info: function(){
@@ -5704,9 +5756,9 @@ var SoundGallery = {
   _col: null, _colT: null, _vinA: 0, _kindDrawn: null,
   /* P8+ 打磨：两板各向内收 0.35 m ⇒ 画框左右留白；封面 1.90→2.15 ⇒ 强化浮空体积感。
      W/H 保持 3.00/0.375（= 画布 1024:128 的 8.0 宽高比，缩放不压字）；yaw 不动（±0.5 = 八字环抱）。 */
-  ALB: { x: -4.25, y: 1.80, dz: -1.15, yaw: 0.50, size: 2.15 },
+  ALB: { x: -3.85, y: 2.75, dz: 0.10, yaw: 0.55, size: 2.80 },
   LYR: { x: 4.25, y: 1.95, dz: -1.15, yaw: -0.52, N: 7, DY: 0.42, DZ: 0.10, W: 3.00, H: 0.375 },
-  KIND_COL: { intro: 0x18E0FF, verse: 0x59C8E8, preChorus: 0x9E5EE8, chorus: 0xFF4FD8,
+  KIND_COL: { intro: 0xC453ED, verse: 0xC873ED, preChorus: 0x9E5EE8, chorus: 0xFF4FD8,
               bridge: 0x8CFFC8, climax: 0xFFA62B, outro: 0xA78BEA },
   KIND_TXT: { intro: '前奏', verse: '主歌', preChorus: '预副歌', chorus: '副歌',
               bridge: '桥段', climax: '高潮', outro: '终章' },
@@ -5739,6 +5791,15 @@ var SoundGallery = {
     var A = SoundGallery.alb; if (!A) return;
     var cv = A.cv, g = A.g, W = cv.width, H = cv.height;
     var acc = SoundGallery.colOf(kind || 'verse'), t = SoundGallery._title();
+    if (SoundGallery.coverArt && !(CW.track && CW.track.demoVocal)){
+      g.clearRect(0,0,W,H); g.drawImage(SoundGallery.coverArt,0,0,W,H);
+      if (t.name !== 'Galactic Rap'){
+        g.fillStyle = 'rgba(15,12,40,.96)'; g.fillRect(24,20,W-48,150);
+        g.fillStyle = '#fff'; g.font = '700 38px sans-serif'; g.fillText(t.name.slice(0,24),40,80);
+        g.font = '500 24px sans-serif'; g.fillText(t.artist.slice(0,30),40,120);
+      }
+      A.tx.needsUpdate = true; return;
+    }
     g.clearRect(0, 0, W, H);
     var lg = g.createLinearGradient(0, 0, W, H);
     lg.addColorStop(0, '#121B36'); lg.addColorStop(0.55, '#1B1140'); lg.addColorStop(1, '#080B18');
@@ -5761,7 +5822,7 @@ var SoundGallery = {
     g.fillText(nm, 44, 132);
     g.fillStyle = SoundGallery._css(acc, 0.95);
     g.font = '600 34px "PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif';
-    g.fillText(t.artist, 44, 182);
+    g.fillText(t.artist, 44, 182, W - 88);
     /* 角标 + 内描边，强化"唱片封套"识别 */
     g.strokeStyle = SoundGallery._css(acc, 0.55); g.lineWidth = 4;
     g.strokeRect(10, 10, W - 20, H - 20);
@@ -5776,16 +5837,20 @@ var SoundGallery = {
     var cv = D.cv, g = D.g, C = cv.width / 2, R = C - 6;
     g.clearRect(0, 0, cv.width, cv.height);
     g.beginPath(); g.arc(C, C, R, 0, Math.PI * 2);
-    g.fillStyle = '#0B0B12'; g.fill();
+    var black = g.createRadialGradient(C,C,R*0.3,C,C,R);
+    black.addColorStop(0,'#272234'); black.addColorStop(0.5,'#080913'); black.addColorStop(0.8,'#202331'); black.addColorStop(1,'#080913');
+    g.fillStyle = black; g.fill();
     g.lineWidth = 1;
     for (var r = R - 10; r > R * 0.36; r -= 7){
       g.beginPath(); g.arc(C, C, r, 0, Math.PI * 2);
       g.strokeStyle = 'rgba(255,255,255,' + (0.030 + 0.022 * ((r / 7) % 2)).toFixed(3) + ')'; g.stroke();
     }
     var t = SoundGallery._title();
-    var acc = SoundGallery.colOf(null);
+    var acc = 0xAE76D8;
     g.beginPath(); g.arc(C, C, R * 0.36, 0, Math.PI * 2);
-    g.fillStyle = SoundGallery._css(acc, 0.92); g.fill();
+    var label = g.createRadialGradient(C-20,C-25,4,C,C,R*0.36);
+    label.addColorStop(0,'#F8D5FF'); label.addColorStop(0.45,'#A675CD'); label.addColorStop(1,'#694194');
+    g.fillStyle = label; g.fill();
     g.beginPath(); g.arc(C, C, 14, 0, Math.PI * 2); g.fillStyle = '#080B18'; g.fill();
     g.save(); g.translate(C, C); g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillStyle = 'rgba(8,11,24,0.86)';
@@ -5870,22 +5935,46 @@ var SoundGallery = {
     SoundGallery.disc = SoundGallery._tex(512, 512);
     SoundGallery.vinylMesh = new THREE.Mesh(new THREE.CircleGeometry(0.62, 48),
       SoundGallery._panel(SoundGallery.disc.tx, 10));
-    SoundGallery.vinylMesh.position.set(-0.72, 0, -0.05);
+    SoundGallery.vinylMesh.position.set(0.70, 0.30, -0.10);
+    SoundGallery.vinylMesh.scale.setScalar(2.55);
     SoundGallery.vinylMesh.renderOrder = 10; ag.add(SoundGallery.vinylMesh);
 
     SoundGallery.alb = SoundGallery._tex(512, 512);
     SoundGallery.albumMesh = new THREE.Mesh(new THREE.PlaneGeometry(sz, sz),
       SoundGallery._panel(SoundGallery.alb.tx, 11));
+    SoundGallery.albumMesh.scale.set(0.75, 1.30, 1);
     SoundGallery.albumMesh.renderOrder = 11; ag.add(SoundGallery.albumMesh);
+    var cover = new Image();
+    cover.onload = function(){ SoundGallery.coverArt = cover; SoundGallery._kindDrawn = null; };
+    cover.src = 'assets/galaxy-album.png';
+    /* Solid sleeve spine and concentric halo live in world space, alongside the spinning vinyl. */
+    add(ag, new THREE.BoxGeometry(0.17, sz * 1.30, 0.25),
+      basic(0xAF63CF, { transparent:true, opacity:0.65, fog:false }), -sz*0.75/2-0.08, 0, -0.10);
+    [1.65,1.73,1.80].forEach(function(radius, i){
+      var ring = add(ag, new THREE.TorusGeometry(radius, i === 1 ? 0.026 : 0.012, 6, 96),
+        basic(0xCC56FF, { transparent:true, opacity:i === 1 ? 0.65 : 0.28, additive:true, fog:false, depthWrite:false }),
+        0.70, 0.30, -0.16, { cast:false, recv:false });
+      ring.rotation.z = 0.35;
+    });
+    var lyrics = document.getElementById('cwlyrics');
+    if (!lyrics){
+      lyrics = document.createElement('div'); lyrics.id = 'cwlyrics';
+      lyrics.setAttribute('aria-label', '声浪诗行');
+      lyrics.innerHTML = '<div class="lyric-axis"><i></i></div>' +
+        Array.from({length:6}, function(){ return '<p></p>'; }).join('');
+      document.body.appendChild(lyrics);
+    }
+    SoundGallery.lyricDOM = lyrics; SoundGallery.lyricRows = lyrics.querySelectorAll('p');
 
     SoundGallery.frameMesh = new THREE.Mesh(new THREE.PlaneGeometry(sz + 0.16, sz + 0.16),
       SoundGallery._panel(SoundGallery._frameTex(), 12));
+    SoundGallery.frameMesh.scale.set(0.75, 1.30, 1);
     SoundGallery.frameMesh.material.blending = THREE.AdditiveBlending;
     SoundGallery.frameMesh.material.opacity = 0.55; SoundGallery.frameMesh.renderOrder = 12;
     ag.add(SoundGallery.frameMesh);
 
     var L = SoundGallery.LYR;
-    var lg = new THREE.Group(); root.add(lg); SoundGallery.lyrGroup = lg;
+    var lg = new THREE.Group(); root.add(lg); SoundGallery.lyrGroup = lg; lg.visible = false;
     SoundGallery.slots = [];
     for (var i = 0; i < L.N; i++){
       var tx = SoundGallery._tex(1024, 128);
@@ -5920,6 +6009,7 @@ var SoundGallery = {
   },
   reset: function(){
     SoundGallery._sig = ''; SoundGallery._lines = null; SoundGallery._idx = -1; SoundGallery._frac = 0;
+    document.body.classList.remove('vocal-english');
     SoundGallery._secKind = null; SoundGallery._kindDrawn = null;
     SoundGallery._pulse = 0; SoundGallery._reso = 0; SoundGallery._resoSpan = 0;
     SoundGallery._fade = 1; SoundGallery._scale = 1; SoundGallery._gather = 1;
@@ -5929,13 +6019,14 @@ var SoundGallery = {
       SoundGallery.slots[i].text = null; SoundGallery.slots[i].active = null;
     }
   },
-  /* ---- 诗行：优先 chart.lyrics（真词），否则按乐段结构生成 ---- */
+  /* ---- 诗行：人声曲可用 visualLyrics 把长英文句拆为短唱词，仍留在原右侧画廊 ---- */
   _linesFor: function(){
     var ch = Chart.data; if (!ch) return [];
     var out = [], i;
-    if (ch.lyrics && ch.lyrics.length){
-      for (i = 0; i < ch.lyrics.length; i++)
-        out.push({ t: +ch.lyrics[i].t, text: String(ch.lyrics[i].text || ''), kind: ch.lyrics[i].kind || 'verse' });
+    var vocalLines = (ch.visualLyrics && ch.visualLyrics.length) ? ch.visualLyrics : ch.lyrics;
+    if (vocalLines && vocalLines.length){
+      for (i = 0; i < vocalLines.length; i++)
+        out.push({ t: +vocalLines[i].t, text: String(vocalLines[i].text || ''), kind: vocalLines[i].kind || 'verse' });
       return out;
     }
     var ss = ch.sections || [], BAR = ch.bar || 1.52;
@@ -5969,6 +6060,7 @@ var SoundGallery = {
                 (+(ch.duration || 0)).toFixed(2) + ':' + ((ch.sections || []).length);
       if (sig !== SoundGallery._sig){
         SoundGallery._sig = sig;
+        document.body.classList.toggle('vocal-english', ch.song === 'knockVocal');
         SoundGallery._lines = SoundGallery._linesFor();
         SoundGallery._idx = -1; SoundGallery._frac = 0;
         SoundGallery._kindDrawn = null; SoundGallery.head.drawn = null; SoundGallery._secKind = null;
@@ -5994,6 +6086,16 @@ var SoundGallery = {
       if (b > a) frac = clamp((st - a) / (b - a), 0, 1);
     }
     SoundGallery._idx = idx;
+    if (SoundGallery.lyricRows && lines.length){
+      for (var row = 0; row < 6; row++){
+        var lineIdx = (idx + row - 2 + lines.length) % lines.length;
+        var item = SoundGallery.lyricRows[row], content = lines[lineIdx].text;
+        if (CW.track && CW.track.song === 'rapGalactic' && !ch.lyrics && idx + row < 2)
+          content = ['穿过星海的尽头', '在无重力的夜空'][idx + row];
+        if (item.textContent !== content) item.textContent = content;
+        item.className = row === 2 ? 'active' : (row === 0 || row === 5 ? 'distant' : '');
+      }
+    }
 
     /* ③ 段落主题色（平滑迁移） */
     var kind = (Track.section && Track.section.kind) || (idx >= 0 && lines[idx] ? lines[idx].kind : null);
@@ -6033,11 +6135,14 @@ var SoundGallery = {
     /* ⑥ 左 · 浮空唱片台 */
     var A = SoundGallery.ALB, ag = SoundGallery.albumGroup, pulse = SoundGallery._pulse, reso = SoundGallery._reso;
     if (ag){
-      ag.position.set(A.x * FG + Math.sin(T * 0.52) * 0.10, A.y + Math.sin(T * 0.90) * 0.10, hz + A.dz);
+      var portrait = S.camera.aspect < 1.3;
+      ag.position.set((portrait ? -1.2 : A.x) * FG + Math.sin(T * 0.52) * 0.10,
+        (portrait ? 3.3 : A.y) + Math.sin(T * 0.90) * 0.10,
+        hz + (portrait ? -1.8 : A.dz));
       ag.rotation.y = A.yaw + Math.sin(Math.PI * prog) * 0.10 + Math.sin(T * 0.42) * 0.055 + reso * 0.06;
       ag.rotation.z = Math.sin(T * 0.63) * 0.018;
       ag.rotation.x = Math.sin(T * 0.37) * 0.020 - prog * 0.06;
-      ag.scale.setScalar((1 + 0.035 * pulse + 0.05 * reso) * FS);
+      ag.scale.setScalar((1 + 0.035 * pulse + 0.05 * reso) * FS * (portrait ? 0.45 : 1));
     }
     var spb = ch ? (ch.spb || 0) : 0;
     if (!spb) spb = 60 / ((typeof BeatClock !== 'undefined' && BeatClock.bpm) || 112);
@@ -6116,10 +6221,10 @@ var _VERSE_BANK = SoundGallery.VERSE = {
                '我把高度唱成旋律', '云在海面写下休止符', '再抬升一点，就摸到光',
                '回响很慢，但一直在', '让风替我把尾音拉长', '落下去，也是一种飞翔',
                '归航的弧线，正好是副歌', '所有的回响，都回到起点'],
-  rapGalactic:['点火，倒数三拍就出发', '银河是一张铺开的谱面', '低音在舱底滚动',
+  rapGalactic:['让音乐点燃宇宙', '跟随节奏 一起飞行', '未来在前方闪烁', '梦在星河中降落',
                '把星尘当作押韵的韵脚', '每一拍，都跨过一个光年', '重力失效，节拍接管',
                '让整条星带跟着我的脚步走', '远方不是距离，是速度', '把宇宙放进十六小节',
-               '尾声之后，还有余震', '落地，但节拍没有停'],
+               '穿过星海的尽头', '在无重力的夜空'],
   rapChristmas:['雪落下来的声音，是四四拍', '铃铛一响，夜就亮了', '红色与金色在同一条街',
                '把祝福押进鼓点里', '炉火旁，节拍慢慢摇', '每一声铃，都是一次转调',
                '回来的路，铺满了雪与歌', '让这一夜，循环播放', '零点钟声，落在正拍上']
@@ -6575,7 +6680,7 @@ var CameraRig = {
    ▸ 切换时长 180ms / easeInOutSine（比操作慢 —— 镜头是"运镜"）；roll 恒 0（防晕 §5.4）。
    ========================================================================== */
 var LENSG = {
-  chase:    { off: [0,    1.55, 4.90], look: [0, 1.20, -0.50], fov: 70 },  /* 与 CAM.causeway 定帧等价 */
+  chase:    { off: [0,    1.80, 4.90], look: [0, 2.65, -0.50], fov: 70 },  /* 与 CAM.causeway 定帧等价 */
   onboard:  { off: [0,    1.62, 1.75], look: [0, 1.28, -7.00], fov: 92 },
   overhead: { off: [0,    6.00, 2.60], look: [0, 0.60, -7.00], fov: 78 },
   lateral:  { off: [4.50, 1.70, 2.60], look: [0, 1.10, -4.00], fov: 70 },
@@ -6585,7 +6690,7 @@ var Lens = {
   cur: 'chase', t: 1, DUR: 0.180, fromGeo: null, fromFov: 70, fov: 70,
   ay: null, driftPh: 0, cueIdx: 0, lastBar: -99, lastPhrase: -1, _lensOn: false,
   kick: 0, kickT: 999, kickDur: 0,                        /* P2·M2：Drop 全景 FOV 冲击（一次性、随时间衰减） */
-  fixed: (Q.get('fixchase') === '1'),
+  fixed: (Q.get('fixchase') !== '0'),
   /* P2·M2：请求一次 FOV 冲击（deg 度数 / dur 秒）—— 叠加在常态 FOV 曲线上，衰减后归零 ⇒ 不改常态 */
   kickTo: function(deg, dur){ Lens.kick = deg; Lens.kickDur = dur || 0.5; Lens.kickT = 0; },
   reset: function(){
@@ -6612,6 +6717,7 @@ var Lens = {
     if (FREEZE || !Track.isCw(k)) return;                 /* 双保险（调用点已在 !FREEZE 内） */
     var S = SCN.causeway; if (!S || !S.camera || !S.hero) return;
     var h = S.hero, cam = S.camera;
+    h.scale.setScalar(cam.aspect < 1.3 ? 0.58 : 0.90);
     LensArbiter.update(dt);
     if (Lens.t < 1) Lens.t = Math.min(1, Lens.t + dt / Lens.DUR);
     var e = (Lens.t >= 1) ? 1 : easeInOutSine(Lens.t);
@@ -6633,7 +6739,7 @@ var Lens = {
     var spr = (_cs > _cb) ? clamp((Track.speed() - _cb) / (_cs - _cb), 0, 1) : 0;
     var en = clamp(Track.energy, 0, 1);
     var drive = clamp(0.7 * spr + 0.3 * Math.max(0, en - CW.SPRINT_AT) / (1 - CW.SPRINT_AT), 0, 1);
-    var fovT = G.fov + (92 - G.fov) * drive;
+    var fovT = G.fov + (Lens.fixed ? 3 : (92 - G.fov)) * drive;
     /* P2·M2：Drop 冲击叠加（限时衰减，归零后常态曲线不变 ⇒ 定帧 / 门禁不受影响） */
     if (Lens.kickT < Lens.kickDur){
       Lens.kickT += dt;
@@ -6649,7 +6755,7 @@ var Lens = {
     /* 镜头名指示：仅调试 / 固定追尾辅助下显示 */
     var q = RhythmHUD._q;
     if (q && q.lens){
-      var show = (Lens.fixed || DBG);
+      var show = DBG;
       if (show){
         if (!Lens._lensOn){ q.lens.className = 'lens on'; Lens._lensOn = true; }
         var nm = Lens.fixed ? '固定追尾' : Lens.cur.toUpperCase();
