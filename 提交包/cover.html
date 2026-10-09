@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: 'PF'; src: local('PingFang SC'); }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html,body { width:1920px; height:1080px; overflow:hidden; }
+  body { font-family: 'PingFang SC','Microsoft YaHei','Helvetica Neue',Arial,sans-serif;
+         -webkit-font-smoothing:antialiased; background:#0a0e1e; }
+
+  .stage { position:relative; width:1920px; height:1080px; overflow:hidden; }
+  .bg { position:absolute; inset:0; width:1920px; height:1080px; object-fit:cover; }
+
+  /* 整体暗角，压住边缘、突出中央主视觉 */
+  .vignette { position:absolute; inset:0;
+    background: radial-gradient(125% 105% at 62% 38%, rgba(0,0,0,0) 38%, rgba(5,8,24,.42) 100%); }
+
+  /* 底部信息带 */
+  .band { position:absolute; left:0; right:0; bottom:0; height:330px;
+    background: linear-gradient(to top,
+      rgba(6,9,26,.97) 0%, rgba(6,9,26,.90) 34%,
+      rgba(6,9,26,.55) 66%, rgba(6,9,26,0) 100%); }
+
+  .band-inner { position:absolute; left:64px; right:64px; bottom:40px; height:200px;
+    display:flex; flex-direction:column; justify-content:flex-end; }
+
+  .lead { font-size:38px; font-weight:800; color:#fff; letter-spacing:.5px;
+    text-shadow:0 2px 18px rgba(0,0,0,.5); }
+  .lead em { font-style:normal; color:#7FE3D2; }
+
+  .chips { display:flex; gap:14px; margin-top:18px; }
+  .chip { display:flex; align-items:center; gap:11px;
+    background:rgba(255,255,255,.13); border:1px solid rgba(255,255,255,.28);
+    border-radius:999px; padding:11px 22px;
+    font-size:22px; font-weight:600; color:#fff; letter-spacing:.3px; }
+  .dot { width:11px; height:11px; border-radius:50%; box-shadow:0 0 10px currentColor; }
+  .d-mint { background:#5FD3C0; color:#5FD3C0; }
+  .d-coral { background:#FF8A5B; color:#FF8A5B; }
+  .d-sky  { background:#6EC6F0; color:#6EC6F0; }
+  .d-must { background:#F2C14E; color:#F2C14E; }
+
+  .attrib { margin-top:16px; font-size:15px; color:rgba(255,255,255,.42); letter-spacing:.2px; }
+
+  /* 右上角赛事标 */
+  .event { position:absolute; top:46px; right:64px;
+    display:flex; align-items:center; gap:12px;
+    background:rgba(8,12,32,.5); border:1px solid rgba(255,255,255,.34);
+    border-radius:999px; padding:13px 28px; backdrop-filter:blur(10px);
+    font-size:21px; font-weight:600; color:#fff; letter-spacing:.4px;
+    box-shadow:0 8px 30px rgba(0,0,0,.28); }
+  .event .mk { width:10px; height:10px; border-radius:50%; background:#F2C14E;
+    box-shadow:0 0 12px #F2C14E; }
+
+  /* 实机演示内嵌卡 */
+  .inset { position:absolute; right:64px; bottom:300px; width:660px;
+    border-radius:22px; overflow:hidden; border:3px solid rgba(255,255,255,.9);
+    box-shadow:0 28px 70px rgba(0,0,0,.58); }
+  .inset img { display:block; width:100%; }
+  .inset .tag { position:absolute; top:16px; left:16px;
+    background:rgba(8,12,32,.72); border:1px solid rgba(255,255,255,.3);
+    color:#fff; font-size:19px; font-weight:600; padding:8px 18px; border-radius:999px;
+    letter-spacing:.4px; }
+
+  /* 品牌英文小标（左上，贴在中文标题/标语下方的空隙处） */
+  .wordmark { position:absolute; left:72px; top:404px;
+    font-size:18px; letter-spacing:8px; font-weight:600;
+    color:rgba(255,255,255,.9); text-shadow:0 2px 12px rgba(0,0,0,.5); }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <img class="bg" src="../out/full_home.png" alt="">
+    <div class="vignette"></div>
+
+    <!-- 右上：赛事信息 -->
+    <div class="event"><span class="mk"></span>腾讯音乐首届高校 AI 黑客松 · 赛道2 创新音乐产品</div>
+
+    <!-- 品牌英文小标 -->
+    <div class="wordmark">SOUNDWAVE&nbsp;PLANET</div>
+
+    <!-- 实机演示内嵌 -->
+    <div class="inset">
+      <img src="../out/cw-p4-lens-onboard.png" alt="">
+      <div class="tag">实机演示 · 超频长阶</div>
+    </div>
+
+    <!-- 底部信息带 -->
+    <div class="band"></div>
+    <div class="band-inner">
+      <div class="lead">把流行乐从「听」，挪到<em>「决定怎么玩」</em></div>
+      <div class="chips">
+        <div class="chip"><span class="dot d-mint"></span>换歌即换关</div>
+        <div class="chip"><span class="dot d-coral"></span>上传任意歌 · 本地实时生成关卡</div>
+        <div class="chip"><span class="dot d-sky"></span>3D 低多边形跑酷音游</div>
+        <div class="chip"><span class="dot d-must"></span>单文件 · 零构建 · 纯前端</div>
+      </div>
+      <div class="attrib">内置曲目素材：Kevin MacLeod (incompetech.com) · CC BY 4.0　|　用户上传歌曲仅本地分析、不上传服务器</div>
+    </div>
+  </div>
+</body>
+</html>

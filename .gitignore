@@ -23,3 +23,6 @@ assets/local-*.wav
 assets/local-*.mp3
 assets/local-*.m4a
 assets/upload-*
+
+# WorkBuddy 站点部署描述（appId / localDir 等本地状态，不入库）
+.wbapp_*.genie
