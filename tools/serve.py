@@ -14,7 +14,7 @@ import os
 import re
 import sys
 import mimetypes
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
 RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
 
@@ -99,7 +99,7 @@ def main():
     os.chdir(root)
     mimetypes.add_type("audio/mpeg", ".mp3")
     mimetypes.add_type("audio/wav", ".wav")
-    srv = HTTPServer(("127.0.0.1", port), RangeHandler)
+    srv = ThreadingHTTPServer(("127.0.0.1", port), RangeHandler)
     print("serving %s at http://127.0.0.1:%d/ (Range enabled)" % (root, port), flush=True)
     srv.serve_forever()
 

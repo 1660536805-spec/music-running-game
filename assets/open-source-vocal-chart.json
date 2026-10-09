@@ -1,0 +1,323 @@
+{
+  "schema": 1,
+  "song": "openSourcePeople",
+  "title": "开源人之歌 · 歌词共鸣",
+  "bpm": 92,
+  "spb": 0.652174,
+  "bar": 2.608696,
+  "beats": 47,
+  "bars": 12,
+  "duration": 30.5,
+  "track": {
+    "width": 3.5,
+    "base": 11,
+    "sprint": 11,
+    "sprintAt": 2,
+    "layerHi": 0.9,
+    "switchMs": 90,
+    "z0": 3.8
+  },
+  "sections": [
+    {
+      "index": 0,
+      "kind": "verse",
+      "label": "叙事 · 逐句应答",
+      "t0": 0,
+      "t1": 13.967,
+      "bars": 5,
+      "energy": 0.55,
+      "density": 0.3,
+      "speed": 11,
+      "camera": "chase",
+      "special": null
+    },
+    {
+      "index": 1,
+      "kind": "preChorus",
+      "label": "相遇 · 呼吸留白",
+      "t0": 13.967,
+      "t1": 21,
+      "bars": 3,
+      "energy": 0.68,
+      "density": 0.3,
+      "speed": 11,
+      "camera": "chase",
+      "special": null
+    },
+    {
+      "index": 2,
+      "kind": "chorus",
+      "label": "回望 · 旋律下行",
+      "t0": 21,
+      "t1": 24.433,
+      "bars": 1,
+      "energy": 0.8,
+      "density": 0.3,
+      "speed": 11,
+      "camera": "chase",
+      "special": null
+    },
+    {
+      "index": 3,
+      "kind": "outro",
+      "label": "志气 · 长音收束",
+      "t0": 24.433,
+      "t1": 30.5,
+      "bars": 2,
+      "energy": 0.9,
+      "density": 0.3,
+      "speed": 11,
+      "camera": "chase",
+      "special": null
+    }
+  ],
+  "lyrics": [
+    {
+      "t": 0,
+      "end": 3.233,
+      "text": "我自娱自乐，荣辱不惊",
+      "kind": "verse"
+    },
+    {
+      "t": 3.233,
+      "end": 7.333,
+      "text": "事了拂衣去，深藏功名",
+      "kind": "verse"
+    },
+    {
+      "t": 7.333,
+      "end": 10.1,
+      "text": "以梦为码，仗键横行",
+      "kind": "verse"
+    },
+    {
+      "t": 10.1,
+      "end": 13.967,
+      "text": "痛快Hacking，激情Coding",
+      "kind": "verse"
+    },
+    {
+      "t": 13.967,
+      "end": 17.633,
+      "text": "有朋自远方来，不亦乐乎",
+      "kind": "preChorus"
+    },
+    {
+      "t": 17.633,
+      "end": 21.0,
+      "text": "志同道合，吾道不孤",
+      "kind": "preChorus"
+    },
+    {
+      "t": 21.0,
+      "end": 24.433,
+      "text": "面对屏幕，遥想当初",
+      "kind": "chorus"
+    },
+    {
+      "t": 24.433,
+      "end": 30.433,
+      "text": "少年志气，咬牙不服输",
+      "kind": "outro"
+    }
+  ],
+  "onsets": [],
+  "anticipations": [],
+  "lensCues": [],
+  "sustains": [
+    {
+      "t0": 12.7,
+      "t1": 13.82,
+      "midi": 67,
+      "lyric": 3
+    },
+    {
+      "t0": 23.2,
+      "t1": 24.3,
+      "midi": 64,
+      "lyric": 6
+    },
+    {
+      "t0": 28.55,
+      "t1": 30.25,
+      "midi": 69,
+      "lyric": 7
+    }
+  ],
+  "phrase": {
+    "bars": [
+      0,
+      15.25,
+      30.5
+    ]
+  },
+  "vocalCues": [
+    {
+      "t": 2.4,
+      "op": "up",
+      "lyric": 0,
+      "text": "↑ 升到高层"
+    },
+    {
+      "t": 5.0,
+      "op": "down",
+      "lyric": 1,
+      "text": "↓ 降到低层"
+    },
+    {
+      "t": 8.6,
+      "op": "up",
+      "lyric": 2,
+      "text": "↑ 升到高层"
+    },
+    {
+      "t": 11.8,
+      "op": "down",
+      "lyric": 3,
+      "text": "↓ 降到低层"
+    },
+    {
+      "t": 12.7,
+      "end": 13.82,
+      "op": "hold",
+      "lyric": 3,
+      "text": "长音 · 按住空格，尾音松开"
+    },
+    {
+      "t": 15.4,
+      "op": "up",
+      "lyric": 4,
+      "text": "↑ 升到高层"
+    },
+    {
+      "t": 19.2,
+      "op": "rest",
+      "lyric": 5,
+      "text": "停顿 · 不切层"
+    },
+    {
+      "t": 22.5,
+      "op": "down",
+      "lyric": 6,
+      "text": "↓ 降到低层"
+    },
+    {
+      "t": 23.2,
+      "end": 24.3,
+      "op": "hold",
+      "lyric": 6,
+      "text": "长音 · 按住空格，尾音松开"
+    },
+    {
+      "t": 25.8,
+      "op": "up",
+      "lyric": 7,
+      "text": "↑ 升到高层"
+    },
+    {
+      "t": 28.0,
+      "op": "rest",
+      "lyric": 7,
+      "text": "停顿 · 不切层"
+    },
+    {
+      "t": 28.55,
+      "end": 30.25,
+      "op": "hold",
+      "lyric": 7,
+      "text": "长音 · 按住空格，尾音松开"
+    }
+  ],
+  "obstacles": [
+    {
+      "id": "v0",
+      "beat": 3.68,
+      "t": 2.4,
+      "z": -22.6,
+      "type": "gate",
+      "layer": "lo",
+      "answer": "hi",
+      "lyric": 0
+    },
+    {
+      "id": "v1",
+      "beat": 7.67,
+      "t": 5.0,
+      "z": -51.2,
+      "type": "gate",
+      "layer": "hi",
+      "answer": "lo",
+      "lyric": 1
+    },
+    {
+      "id": "v2",
+      "beat": 13.19,
+      "t": 8.6,
+      "z": -90.8,
+      "type": "gate",
+      "layer": "lo",
+      "answer": "hi",
+      "lyric": 2
+    },
+    {
+      "id": "v3",
+      "beat": 18.09,
+      "t": 11.8,
+      "z": -126.0,
+      "type": "gate",
+      "layer": "hi",
+      "answer": "lo",
+      "lyric": 3
+    },
+    {
+      "id": "v4",
+      "beat": 23.61,
+      "t": 15.4,
+      "z": -165.6,
+      "type": "gate",
+      "layer": "lo",
+      "answer": "hi",
+      "lyric": 4
+    },
+    {
+      "id": "v5",
+      "beat": 29.44,
+      "t": 19.2,
+      "z": -207.4,
+      "type": "twin",
+      "layer": "both",
+      "answer": "hold",
+      "lyric": 5
+    },
+    {
+      "id": "v6",
+      "beat": 34.5,
+      "t": 22.5,
+      "z": -243.7,
+      "type": "gate",
+      "layer": "hi",
+      "answer": "lo",
+      "lyric": 6
+    },
+    {
+      "id": "v7",
+      "beat": 39.56,
+      "t": 25.8,
+      "z": -280.0,
+      "type": "gate",
+      "layer": "lo",
+      "answer": "hi",
+      "lyric": 7
+    },
+    {
+      "id": "v8",
+      "beat": 42.93,
+      "t": 28.0,
+      "z": -304.2,
+      "type": "twin",
+      "layer": "both",
+      "answer": "hold",
+      "lyric": 7
+    }
+  ]
+}
