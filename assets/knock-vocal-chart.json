@@ -1,0 +1,467 @@
+{
+  "schema": 1,
+  "song": "knockVocal",
+  "title": "Knock · Lyric Ride",
+  "bpm": 119,
+  "spb": 0.504202,
+  "bar": 2.016807,
+  "beats": 61,
+  "bars": 15,
+  "duration": 31,
+  "track": {
+    "width": 3.5,
+    "base": 11,
+    "sprint": 11,
+    "sprintAt": 2,
+    "layerHi": 0.9,
+    "switchMs": 90,
+    "z0": 3.8
+  },
+  "sections": [
+    {
+      "index": 0,
+      "kind": "verse",
+      "label": "街车 · 轻快换层",
+      "t0": 0,
+      "t1": 14.2,
+      "bars": 7,
+      "energy": 0.62,
+      "density": 0.3,
+      "speed": 11,
+      "camera": "chase",
+      "special": null
+    },
+    {
+      "index": 1,
+      "kind": "preChorus",
+      "label": "欲言又止 · 句尾呼吸",
+      "t0": 14.2,
+      "t1": 22.4,
+      "bars": 4,
+      "energy": 0.74,
+      "density": 0.3,
+      "speed": 11,
+      "camera": "chase",
+      "special": null
+    },
+    {
+      "index": 2,
+      "kind": "chorus",
+      "label": "说出口 · 连续换层",
+      "t0": 22.4,
+      "t1": 26.8,
+      "bars": 2,
+      "energy": 0.83,
+      "density": 0.3,
+      "speed": 11,
+      "camera": "chase",
+      "special": null
+    },
+    {
+      "index": 3,
+      "kind": "outro",
+      "label": "凝住 · 停顿收束",
+      "t0": 26.8,
+      "t1": 31,
+      "bars": 2,
+      "energy": 0.58,
+      "density": 0.3,
+      "speed": 11,
+      "camera": "chase",
+      "special": null
+    }
+  ],
+  "lyrics": [
+    {
+      "t": 0,
+      "end": 3.7,
+      "text": "On a streetcar in Tacoma, on a Sunday in July",
+      "kind": "verse"
+    },
+    {
+      "t": 3.7,
+      "end": 7.7,
+      "text": "You're kicking off your sandals, as you stare up at the sky",
+      "kind": "verse"
+    },
+    {
+      "t": 7.7,
+      "end": 11.5,
+      "text": "I look at you and fumble, for the perfect thing to say",
+      "kind": "verse"
+    },
+    {
+      "t": 11.5,
+      "end": 14.2,
+      "text": "But my nerves get in the way",
+      "kind": "verse"
+    },
+    {
+      "t": 14.2,
+      "end": 18.6,
+      "text": "I've cherished you for ages, but my words were locked in cages",
+      "kind": "preChorus"
+    },
+    {
+      "t": 18.6,
+      "end": 22.4,
+      "text": "So afraid that you just saw me as a friend",
+      "kind": "preChorus"
+    },
+    {
+      "t": 22.4,
+      "end": 26.8,
+      "text": "Now I want to set them free, my fingers clenching to the key",
+      "kind": "chorus"
+    },
+    {
+      "t": 26.8,
+      "end": 31,
+      "text": "But I am frozen once again",
+      "kind": "outro"
+    }
+  ],
+  "onsets": [],
+  "anticipations": [],
+  "lensCues": [],
+  "sustains": [
+    {
+      "t0": 12.9,
+      "t1": 14.05,
+      "midi": 64,
+      "lyric": 3
+    },
+    {
+      "t0": 20.9,
+      "t1": 22.2,
+      "midi": 67,
+      "lyric": 5
+    },
+    {
+      "t0": 29.1,
+      "t1": 30.7,
+      "midi": 62,
+      "lyric": 7
+    }
+  ],
+  "phrase": {
+    "bars": [
+      0,
+      15.5,
+      31
+    ]
+  },
+  "vocalCues": [
+    {
+      "t": 1.8,
+      "op": "up",
+      "lyric": 0,
+      "text": "↑ 升到高层"
+    },
+    {
+      "t": 4.8,
+      "op": "down",
+      "lyric": 1,
+      "text": "↓ 降到低层"
+    },
+    {
+      "t": 6.5,
+      "op": "up",
+      "lyric": 1,
+      "text": "↑ 升到高层"
+    },
+    {
+      "t": 9.3,
+      "op": "down",
+      "lyric": 2,
+      "text": "↓ 降到低层"
+    },
+    {
+      "t": 12.7,
+      "op": "rest",
+      "lyric": 3,
+      "text": "停顿 · 不切层"
+    },
+    {
+      "t": 12.9,
+      "end": 14.05,
+      "op": "hold",
+      "lyric": 3,
+      "text": "长音 · 按住空格，尾音松开"
+    },
+    {
+      "t": 15.5,
+      "op": "up",
+      "lyric": 4,
+      "text": "↑ 升到高层"
+    },
+    {
+      "t": 17.5,
+      "op": "down",
+      "lyric": 4,
+      "text": "↓ 降到低层"
+    },
+    {
+      "t": 20.0,
+      "op": "up",
+      "lyric": 5,
+      "text": "↑ 升到高层"
+    },
+    {
+      "t": 20.9,
+      "end": 22.2,
+      "op": "hold",
+      "lyric": 5,
+      "text": "长音 · 按住空格，尾音松开"
+    },
+    {
+      "t": 23.6,
+      "op": "down",
+      "lyric": 6,
+      "text": "↓ 降到低层"
+    },
+    {
+      "t": 25.7,
+      "op": "up",
+      "lyric": 6,
+      "text": "↑ 升到高层"
+    },
+    {
+      "t": 28.6,
+      "op": "rest",
+      "lyric": 7,
+      "text": "停顿 · 不切层"
+    },
+    {
+      "t": 29.1,
+      "end": 30.7,
+      "op": "hold",
+      "lyric": 7,
+      "text": "长音 · 按住空格，尾音松开"
+    }
+  ],
+  "obstacles": [
+    {
+      "id": "v0",
+      "beat": 3.57,
+      "t": 1.8,
+      "z": -16.0,
+      "type": "gate",
+      "layer": "lo",
+      "answer": "hi",
+      "lyric": 0
+    },
+    {
+      "id": "v1",
+      "beat": 9.52,
+      "t": 4.8,
+      "z": -49.0,
+      "type": "gate",
+      "layer": "hi",
+      "answer": "lo",
+      "lyric": 1
+    },
+    {
+      "id": "v2",
+      "beat": 12.89,
+      "t": 6.5,
+      "z": -67.7,
+      "type": "gate",
+      "layer": "lo",
+      "answer": "hi",
+      "lyric": 1
+    },
+    {
+      "id": "v3",
+      "beat": 18.45,
+      "t": 9.3,
+      "z": -98.5,
+      "type": "gate",
+      "layer": "hi",
+      "answer": "lo",
+      "lyric": 2
+    },
+    {
+      "id": "v4",
+      "beat": 25.19,
+      "t": 12.7,
+      "z": -135.9,
+      "type": "twin",
+      "layer": "both",
+      "answer": "hold",
+      "lyric": 3
+    },
+    {
+      "id": "v5",
+      "beat": 30.74,
+      "t": 15.5,
+      "z": -166.7,
+      "type": "gate",
+      "layer": "lo",
+      "answer": "hi",
+      "lyric": 4
+    },
+    {
+      "id": "v6",
+      "beat": 34.71,
+      "t": 17.5,
+      "z": -188.7,
+      "type": "gate",
+      "layer": "hi",
+      "answer": "lo",
+      "lyric": 4
+    },
+    {
+      "id": "v7",
+      "beat": 39.67,
+      "t": 20.0,
+      "z": -216.2,
+      "type": "gate",
+      "layer": "lo",
+      "answer": "hi",
+      "lyric": 5
+    },
+    {
+      "id": "v8",
+      "beat": 46.81,
+      "t": 23.6,
+      "z": -255.8,
+      "type": "gate",
+      "layer": "hi",
+      "answer": "lo",
+      "lyric": 6
+    },
+    {
+      "id": "v9",
+      "beat": 50.97,
+      "t": 25.7,
+      "z": -278.9,
+      "type": "gate",
+      "layer": "lo",
+      "answer": "hi",
+      "lyric": 6
+    },
+    {
+      "id": "v10",
+      "beat": 56.72,
+      "t": 28.6,
+      "z": -310.8,
+      "type": "twin",
+      "layer": "both",
+      "answer": "hold",
+      "lyric": 7
+    }
+  ],
+  "visualLyrics": [
+    {
+      "t": 0,
+      "text": "On a streetcar in Tacoma",
+      "kind": "verse"
+    },
+    {
+      "t": 1.9,
+      "text": "on a Sunday in July",
+      "kind": "verse"
+    },
+    {
+      "t": 3.7,
+      "text": "You're kicking off your",
+      "kind": "verse"
+    },
+    {
+      "t": 5.1,
+      "text": "sandals, as you stare up",
+      "kind": "verse"
+    },
+    {
+      "t": 6.4,
+      "text": "at the sky",
+      "kind": "verse"
+    },
+    {
+      "t": 7.7,
+      "text": "I look at you and fumble",
+      "kind": "verse"
+    },
+    {
+      "t": 9.6,
+      "text": "for the perfect thing",
+      "kind": "verse"
+    },
+    {
+      "t": 10.8,
+      "text": "to say",
+      "kind": "verse"
+    },
+    {
+      "t": 11.5,
+      "text": "But my nerves",
+      "kind": "verse"
+    },
+    {
+      "t": 12.6,
+      "text": "get in the way",
+      "kind": "verse"
+    },
+    {
+      "t": 14.2,
+      "text": "I've cherished you",
+      "kind": "preChorus"
+    },
+    {
+      "t": 16.0,
+      "text": "for ages",
+      "kind": "preChorus"
+    },
+    {
+      "t": 17.0,
+      "text": "but my words were locked",
+      "kind": "preChorus"
+    },
+    {
+      "t": 18.0,
+      "text": "in cages",
+      "kind": "preChorus"
+    },
+    {
+      "t": 18.6,
+      "text": "So afraid that you just",
+      "kind": "preChorus"
+    },
+    {
+      "t": 20.8,
+      "text": "saw me as a friend",
+      "kind": "preChorus"
+    },
+    {
+      "t": 22.4,
+      "text": "Now I want to",
+      "kind": "chorus"
+    },
+    {
+      "t": 23.7,
+      "text": "set them free",
+      "kind": "chorus"
+    },
+    {
+      "t": 24.8,
+      "text": "my fingers clenching",
+      "kind": "chorus"
+    },
+    {
+      "t": 26.0,
+      "text": "to the key",
+      "kind": "chorus"
+    },
+    {
+      "t": 26.8,
+      "text": "But I am frozen",
+      "kind": "outro"
+    },
+    {
+      "t": 29.0,
+      "text": "once again",
+      "kind": "outro"
+    }
+  ]
+}
