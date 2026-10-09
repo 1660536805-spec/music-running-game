@@ -17,8 +17,10 @@
         触发 + 标记段内首个双闸门）／M5 旋律航线（lane 非空 + 同航线 ×1.25）／M6 用跑道弹琴
         （各段音区不同且落在 [−5,7]）。
      ⑤c M5 旋律航线带（P4）：causeway 非定帧下航线带已挂载且段数 = 小节数。
+     ⑤d 声浪画廊（P8）：causeway 非定帧下画廊已挂载、诗行行位 = 7、左右分居赛道两侧、
+        当前诗行随歌推进（把"正在播的专辑 / 正在唱的词"做成赛道两侧实体）。
      ⑥ SongSelect 浮层：可由枢纽「选择歌曲」打开、Esc 收起，且不产生 three 对象。
-     ⑥b 定帧保护：FREEZE 下航线带不挂载（children 不增，护住 causeway 定帧基线）。
+     ⑥b 定帧保护：FREEZE 下航线带与声浪画廊均不挂载（children 不增，护住 causeway 定帧基线）。
      ⑥c 图鉴 / 设置浮层（P7）：两个枢纽按钮开合正常、图鉴 4 曲 × 7 机制内容完整、
         设置默认值逐位等于现状、开/关浮层前后 draw calls 不变（纯 DOM 硬证据）。
      ⑦ 零 console / pageerror。
@@ -263,6 +265,26 @@ const GOLD = { track: 'rapGalactic', chart: 'assets/rap-galactic-chart.json', bg
   ok(lane3d && lane3d.mounted === true, '⑤c M5 航线带未挂载（causeway 非定帧下应挂载）');
   ok(lane3d && lane3d.bars >= 60, '⑤c M5 航线带段数异常（应为 小节数）: ' + (lane3d && lane3d.bars));
 
+  /* ---------------- ⑤d 声浪画廊几何（P8） ----------------
+     为什么单列：P8 把「正在播的专辑」与「正在唱的那句词」做成赛道两侧的实体（左浮空唱片台 /
+     右逐句诗行）—— 音乐与游戏的结合度靠它落地。断言只锁**契约不锁像素**：
+       · causeway 非定帧下必须挂载（否则等于悄悄删了 P8）；
+       · 诗行行位恒为 7（逐句滚动的几何前提）；
+       · 左右分居赛道两侧（album.x < 0 < lyric.x ⇒ "八字环抱"不塌）；
+       · 当前诗行确实随歌推进（idx / text 非空）。
+     定帧不挂载的反向断言见 ⑥b（护住 causeway 定帧基线 calls=147）。 */
+  console.log('=== ⑤d 声浪画廊（赛道两侧浮空专辑 + 逐句诗行）===');
+  const gal = await page.evaluate(() => window.__info().cw.gallery);
+  console.log('gallery = ' + JSON.stringify(gal));
+  ok(gal && gal.mounted === true, '⑤d 声浪画廊未挂载（causeway 非定帧下应挂载）');
+  ok(gal && gal.lines > 0, '⑤d 诗行句数异常: ' + (gal && gal.lines));
+  ok(gal && gal.lyric && gal.lyric.slots === 7, '⑤d 诗行行位应恒为 7: ' + (gal && gal.lyric && gal.lyric.slots));
+  ok(gal && gal.album && gal.album.size > 0, '⑤d 封面尺寸异常: ' + (gal && gal.album && gal.album.size));
+  ok(gal && gal.album && gal.album.x < 0 && gal.lyric && gal.lyric.x > 0,
+     '⑤d 画廊未分居赛道两侧（左封面 x<0 / 右诗行 x>0）: ' + JSON.stringify(gal && { a: gal.album.x, l: gal.lyric.x }));
+  ok(gal && gal.idx >= 0 && !!gal.text,
+     '⑤d 当前诗行未随歌推进（idx / text 为空）: ' + JSON.stringify(gal && { idx: gal.idx, text: gal.text }));
+
   /* ---------------- ⑥ SongSelect 浮层 ---------------- */
   console.log('=== ⑥ SongSelect 浮层 ===');
   await page.evaluate(() => window.__setScene('home'));
@@ -291,16 +313,20 @@ const GOLD = { track: 'rapGalactic', chart: 'assets/rap-galactic-chart.json', bg
   });
   ok(!closed.on, '⑥ Esc 未收起浮层');
 
-  /* ---------------- ⑥b 航线带定帧保护（FREEZE 下不挂载） ---------------- */
-  console.log('=== ⑥b M5 航线带 · 定帧保护 ===');
+  /* ---------------- ⑥b 3D 可视化 · 定帧保护（航线带 / 声浪画廊） ---------------- */
+  console.log('=== ⑥b 3D 可视化 · 定帧保护 ===');
   const fp = await browser.newPage({ viewport: { width: 836, height: 470 }, deviceScaleFactor: 1 });
   await fp.goto(URL + '?scene=causeway&freeze=1', { waitUntil: 'load', timeout: 60000 });
   await fp.waitForTimeout(2600);
   const fl3d = await fp.evaluate(() => (window.__info ? window.__info().cw.lane3d : null));
+  const fgal = await fp.evaluate(() => (window.__info ? window.__info().cw.gallery : null));
   const fchildren = await fp.evaluate(() => window.__SCN.causeway.scene.children.length);
   await fp.close();
-  console.log('FREEZE lane3d = ' + JSON.stringify(fl3d) + '  causeway children=' + fchildren);
+  console.log('FREEZE lane3d = ' + JSON.stringify(fl3d) + '  gallery = ' + JSON.stringify(fgal)
+              + '  causeway children=' + fchildren);
   ok(fl3d && fl3d.mounted === false, '⑥b FREEZE 下航线带仍被挂载（定帧 children 会漂移）');
+  ok(fgal && fgal.mounted === false,
+     '⑥b FREEZE 下声浪画廊仍被挂载（定帧 children 会漂移 ⇒ causeway 定帧基线会被打破）');
 
   /* ---------------- ⑥c 图鉴 / 设置浮层契约（P7 · 纯 DOM · 零 draw call） ----------------
      为什么把断言写在这里：本脚本已是「浮层契约」的既有归属（见 ⑥ SongSelect）。⑥c 只做增量断言：

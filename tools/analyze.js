@@ -12,8 +12,9 @@
      ⑥ M3 预副歌蓄能：运行时谱面里同调长按 ⇒ chargeV 上浮、chargeMult > 1（只奖励）。
      ⑦ M4 终结拍：运行时谱面 outro 内最长长音可定位（cadenceIdx ≥ 0）；同调长按至其结束松手 ⇒ 命中。
      ⑧ M5 旋律航线：航线带已挂载且段数 >0；扫描出 lane 且与航线同层 ⇒ harmMult = 1.25。
+        声浪画廊（P8）：运行时谱面下画廊同样挂载、诗行行位 = 7。
      ⑨ M1 / M2 机制：运行时谱面进副歌 ⇒ over=1.5；进高潮 ⇒ drop=true（换歌即换关的机制层证据）。
-     ⑩ 定帧只读：FREEZE 页面下航线带不挂载（护住 causeway 定帧基线）。
+     ⑩ 定帧只读：FREEZE 页面下航线带与声浪画廊均不挂载（护住 causeway 定帧基线）。
      ⑪ 零 console / pageerror。
    任一不满足 → process.exit(1)。
    用法: node tools/analyze.js
@@ -159,6 +160,12 @@ const SAMPLE_BPM = 112;
   console.log('lane3d = ' + JSON.stringify(lane3d));
   ok(lane3d && lane3d.mounted === true, '⑧ M5 航线带未挂载（运行时谱面下应挂载）');
   ok(lane3d && lane3d.bars > 0, '⑧ M5 航线带段数异常: ' + (lane3d && lane3d.bars));
+  /* ⑧ 声浪画廊（P8）：运行时谱面同样要挂载（上传任意歌 ⇒ 有声浪诗行，消费端零改动） */
+  const galA = await page.evaluate(() => window.__info().cw.gallery);
+  console.log('gallery = ' + JSON.stringify(galA));
+  ok(galA && galA.mounted === true, '⑧ 声浪画廊未挂载（运行时谱面下应挂载）');
+  ok(galA && galA.lyric && galA.lyric.slots === 7, '⑧ 声浪画廊诗行行位应恒为 7: '
+     + (galA && galA.lyric && galA.lyric.slots));
   let sawLane = null, laneHit = 0;
   const dur = chart.duration || 0;
   for (let i = 1; i <= 16 && !laneHit; i++) {
@@ -196,14 +203,17 @@ const SAMPLE_BPM = 112;
   await fp.goto(URL + '?scene=causeway&freeze=1', { waitUntil: 'load', timeout: 60000 });
   await fp.waitForTimeout(2600);
   const fl3d = await fp.evaluate(() => (window.__info ? window.__info().cw.lane3d : null));
+  const fgalA = await fp.evaluate(() => (window.__info ? window.__info().cw.gallery : null));
   const fchildren = await fp.evaluate(() => window.__SCN.causeway.scene.children.length);
   const fanchor = await fp.evaluate(() => {
     const c = window.__info().causeway;
     return !!(c && c.heroC && c.heroC.length === 2);
   });
   await fp.close();
-  console.log('FREEZE lane3d = ' + JSON.stringify(fl3d) + '  causeway children=' + fchildren);
+  console.log('FREEZE lane3d = ' + JSON.stringify(fl3d) + '  gallery = ' + JSON.stringify(fgalA)
+              + '  causeway children=' + fchildren);
   ok(fl3d && fl3d.mounted === false, '⑩ FREEZE 下航线带仍被挂载（定帧 children 会漂移）');
+  ok(fgalA && fgalA.mounted === false, '⑩ FREEZE 下声浪画廊仍被挂载（定帧 children 会漂移）');
   ok(fchildren > 0 && fanchor, '⑩ FREEZE 页面 causeway 结构异常');
 
   /* ---------------- ⑪ 零报错 ---------------- */
